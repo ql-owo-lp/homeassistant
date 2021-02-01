@@ -192,7 +192,7 @@ blueprint:
 variables:
   target_entity: !input target_entity
   _target_entity_off: !input target_entity_off
-  target_entity_off: {{ _target_entity_off | default(target_entity, true) | trim }}
+  target_entity_off: {{ _target_entity_off | default(target_entity, True) | trim }}
   _target_entity_state: !input target_entity_state
   target_entity_state: {{ _target_entity_state | default('on', true) | trim }}
   _target_entity_action_on: !input target_entity_action_on
