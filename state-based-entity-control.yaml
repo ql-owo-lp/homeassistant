@@ -215,7 +215,7 @@ variables:
   _alt_trigger_timeout_input: !input alt_trigger_timeout
   _alt_trigger_timeout: >-
       {% set current_time = now().strftime("%H:%M:%S")  %}
-      {% for alt in (_alt_trigger_timeout_input | default('')).split(';') if alt %}
+      {% for alt in (_alt_trigger_timeout_input or '').split(';') if alt %}
         {% set val = alt.split(',') %}
         {% if val | length == 2 and val[0] %}
           {% set t = val[0].split('-') %}
@@ -228,7 +228,14 @@ variables:
           {% endif %}
         {% endif %}
       {% endfor %}
-  trigger_timeout: "{{ _alt_trigger_timeout | default(_trigger_timeout, true) | int(30) }}"
+  trigger_timeout: >-
+      {% if _alt_trigger_timeout or _alt_trigger_timeout == 0 %}
+        {{ _alt_trigger_timeout }}
+      {% elif _trigger_timeout or _trigger_timeout == 0 %}
+        {{ _trigger_timeout }}
+      {% else %}
+        {{ 30 }}
+      {% endif %}
   sun_elevation_below: !input sun_elevation_below
   
 trigger:
@@ -274,7 +281,7 @@ action:
               - condition: template
                 value_template: "{{ illuminance_sensor and states(illuminance_sensor) | int < illuminance_below | int(-1) }}"
               - condition: template
-                value_template: "{{ sun_elevation_below > -91 and state_attr('sun.sun', 'elevation') | int <= sun_elevation_below | int(-91) }}"
+                value_template: "{{ (sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int <= sun_elevation_below | int(-91) }}"
         sequence:
           - service: logbook.log
             # Add a logbook entry to indicate what triggered this action.
