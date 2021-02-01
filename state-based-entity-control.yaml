@@ -204,7 +204,7 @@ variables:
   trigger_entity_state: "{{ _trigger_entity_state | default('on', true) | trim }}"
   _trigger_entity_state_off: !input trigger_entity_state_off
   trigger_entity_state_off: "{{ _trigger_entity_state_off | default('', true) | trim }}"
-  trigger_timeout: !input trigger_timeout
+  _trigger_timeout: !input trigger_timeout
   illuminance_sensor: !input illuminance_sensor
   illuminance_below: !input illuminance_below
   blocker_entity: !input blocker_entity
