@@ -267,21 +267,15 @@ action:
             value_template: "{{ trigger.platform == 'state' and trigger.entity_id != target_entity }}"
           - condition: template
             # When target entity is not "on".
-            value_template: "{{ not target_entity_state or not (states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true)) }}"
+            value_template: "{{ not (states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true)) }}"
           - condition: template
             # When trigger entity is "on".
             value_template: "{{ states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) }}"
           - condition: template
             # When it's not blocked by blocker_entity.
             value_template: "{{ not blocker_entity or not (states(blocker_entity) | regex_match('^('+ blocker_entity_state | trim +')$', ignorecase=true)) }}"
-          - condition: or
-            conditions:
-              - condition: template
-                value_template: "{{ not illuminance_sensor and sun_elevation_below != none }}"
-              - condition: template
-                value_template: "{{ illuminance_sensor and states(illuminance_sensor) | int < illuminance_below | int(-1) }}"
-              - condition: template
-                value_template: "{{ (sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int <= sun_elevation_below | int(-91) }}"
+          - condition: template
+            value_template: "{{ (illuminance_sensor and states(illuminance_sensor) | int(99999) <= illuminance_below | int(-1)) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
         sequence:
           - service: logbook.log
             # Add a logbook entry to indicate what triggered this action.
