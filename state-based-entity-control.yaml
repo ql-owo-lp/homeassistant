@@ -220,11 +220,12 @@ variables:
         {% endif %}
       {% endfor %}
   trigger_timeout: >-
-      {% if _alt_trigger_timeout %}
-        {{ _alt_trigger_timeout }}
-      {% else %}
-        {{ _trigger_timeout }}
-      {% endif %}
+    {% set timeout = _alt_trigger_timeout | default(_trigger_timeout, true) %}
+    {% if timeout | int(-1) < 0 %}
+      {{ timeout }}
+    {% else %}
+      {{ timeout | int }}
+    {% endif %}
   sun_elevation_below: !input sun_elevation_below
   
 trigger:
