@@ -192,18 +192,18 @@ blueprint:
 variables:
   target_entity: !input target_entity
   _target_entity_off: !input target_entity_off
-  target_entity_off: {{ _target_entity_off | default(target_entity, True) | trim }}
+  target_entity_off: "{{ _target_entity_off | default(target_entity, true) | trim }}"
   _target_entity_state: !input target_entity_state
-  target_entity_state: {{ _target_entity_state | default('on', true) | trim }}
+  target_entity_state: "{{ _target_entity_state | default('on', true) | trim }}"
   _target_entity_action_on: !input target_entity_action_on
-  target_entity_action_on: {{ _target_entity_action_on | default('homeassistant.turn_on', true) | trim }}
+  target_entity_action_on: "{{ _target_entity_action_on | default('homeassistant.turn_on', true) | trim }}"
   _target_entity_action_off: !input target_entity_action_off
-  target_entity_action_off: {{ _target_entity_action_on | default('homeassistant.turn_off', true) | trim }}
+  target_entity_action_off: "{{ _target_entity_action_on | default('homeassistant.turn_off', true) | trim }}"
   trigger_entity: !input trigger_entity
   _trigger_entity_state: !input trigger_entity_state
-  trigger_entity_state: {{ _trigger_entity_state | default('on', true) | trim }}
+  trigger_entity_state: "{{ _trigger_entity_state | default('on', true) | trim }}"
   _trigger_entity_state_off: !input trigger_entity_state_off
-  trigger_entity_state_off: {{ _trigger_entity_state_off | default('', true) | trim }}
+  trigger_entity_state_off: "{{ _trigger_entity_state_off | default('', true) | trim }}"
   _trigger_timeout: !input trigger_timeout
   trigger_timeout: {{ _trigger_timeout | int(30) }}
   illuminance_sensor: !input illuminance_sensor
