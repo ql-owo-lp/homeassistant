@@ -9,7 +9,7 @@ blueprint:
       selector:
         entity:
     trigger_entity_state:
-      name: Trigger Entity States
+      name: (Optional) Trigger Entity States
       description: >-
         When the trigger entity state is of this value, this automation will 
         try to change the target entity's state to desired state with target 
@@ -17,7 +17,6 @@ blueprint:
         If this value is left empty, it will default to "on". 
         This value supports regular expression, 
         i.e. you can list multiple values as "state_1|state_2|state_3".
-      default: 'on'
       selector:
         entity:
           domain: input_text
@@ -31,7 +30,6 @@ blueprint:
         defined above will trigger the turn off action. 
         This value supports regular expression, 
         i.e. you can list multiple values as "state_1|state_2|state_3".
-      default: 'on'
       selector:
         entity:
           domain: input_text
@@ -59,7 +57,6 @@ blueprint:
       description: >-
         Action that will change target entity's state to desired state.
         If this value is left empty, it will default to "homeassistant.turn_on". 
-      default: homeassistant.turn_on
       selector:
         entity:
           domain: input_text
@@ -70,7 +67,6 @@ blueprint:
         It doesn't necessary have to set the entity's state to 'off', 
         as long as it's not the desired state it will be fine.
         If this value is left empty, it will default to "homeassistant.turn_off". 
-      default: homeassistant.turn_off
       selector:
         entity:
           domain: input_text
@@ -189,16 +185,22 @@ blueprint:
 variables:
   target_entity: !input target_entity
   _target_entity_off: !input target_entity_off
-  target_entity_off: "{{ _target_entity_off | default(target_entity, true) }}"
-  target_entity_state: !input target_entity_state
-  target_entity_action_on: !input target_entity_action_on
-  target_entity_action_off: !input target_entity_action_off
+  target_entity_off: "{{ _target_entity_off | default(target_entity, true) | trim }}"
+  _target_entity_state: !input target_entity_state
+  target_entity_state: "{{ _target_entity_state | default('on', true) | trim }}
+  _target_entity_action_on: !input target_entity_action_on
+  target_entity_action_on: "{{ _target_entity_action_on | default('homeassistant.turn_on', true) | trim }}
+  _target_entity_action_off: !input target_entity_action_off
+  target_entity_action_off: "{{ _target_entity_action_on | default('homeassistant.turn_off', true) | trim }}
   trigger_entity: !input trigger_entity
-  trigger_entity_state: !input trigger_entity_state
-  trigger_entity_state_off: !input trigger_entity_state_off
+  _trigger_entity_state: !input trigger_entity_state
+  trigger_entity_state: "{{ _trigger_entity_state | default('on', true) | trim }}
+  _trigger_entity_state_off: !input trigger_entity_state_off
+  trigger_entity_state_off: "{{ _trigger_entity_state_off | trim }}
   _trigger_timeout: !input trigger_timeout
   illuminance_sensor: !input illuminance_sensor
-  illuminance_below: !input illuminance_below
+  _illuminance_below: !input illuminance_below
+  illuminance_below: {{ _illuminance_below | int }}
   blocker_entity: !input blocker_entity
   blocker_entity_state: !input blocker_entity_state
   timeout_blocker_entity: !input timeout_blocker_entity
@@ -256,11 +258,14 @@ action:
             # This prevent the rule from turning on target entity that is turned off manually from UI/App or from physical switch, even though the trigger entity's state is not cleared.
             value_template: "{{ trigger.platform == 'state' and trigger.entity_id != target_entity }}"
           - condition: template
+            # When target entity is not "on".
             value_template: "{{ not target_entity_state or not (states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true)) }}"
           - condition: template
+            # When trigger entity is "on".
             value_template: "{{ states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) }}"
           - condition: template
-            value_template: "{{ not blocker_entity or not (states(blocker_entity) | regex_match('^('+ blocker_entity_state +')$', ignorecase=true)) }}"
+            # When it's not blocked by blocker_entity.
+            value_template: "{{ not blocker_entity or not (states(blocker_entity) | regex_match('^('+ blocker_entity_state | trim +')$', ignorecase=true)) }}"
           - condition: or
             conditions:
               - condition: template
@@ -281,11 +286,14 @@ action:
               entity_id: "{{ target_entity }}"
       - conditions:
           - condition: template
+            # When target entity is "on".
             value_template: "{{ not target_entity_state or states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true) }}"
           - condition: template
+            # When trigger entity is "off".
             value_template: "{{ (trigger_entity_state_off and states(trigger_entity) | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true)) or (not trigger_entity_state_off and states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true))) }}"
           - condition: template
-            value_template: "{{ not timeout_blocker_entity or not (states(timeout_blocker_entity) | regex_match('^('+ timeout_blocker_entity_state +')$', ignorecase=true)) }}"
+            # When it's not blocked by timeout_blocker_entity.
+            value_template: "{{ not timeout_blocker_entity or not (states(timeout_blocker_entity) | regex_match('^('+ timeout_blocker_entity_state | trim +')$', ignorecase=true)) }}"
         sequence:
           # We don't need to do a "wait for trigger" action.
           # As we listen to any state change of the motion_sensor/target_entity,
