@@ -304,7 +304,11 @@ action:
             # Add a logbook entry to indicate what triggered this action.
             data_template:
               name: "{{ state_attr(target_entity_off, 'friendly_name') }}"
-              message: "will execute service {{ target_entity_action_off }} after {{ trigger_timeout }} seconds/time"
+              message: >-
+                  will execute service {{ target_entity_action_off }} after {{ trigger_timeout }}
+                  {% if trigger_timeout | int(-1) == -1 %}
+                    seconds
+                  {% endif %}
               entity_id: "{{ target_entity_off }}"
           - delay: "{{ trigger_timeout }}"
           - service: logbook.log
