@@ -291,7 +291,7 @@ action:
             value_template: "{{ not target_entity_state or states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true) }}"
           - condition: template
             # When trigger entity is "off".
-            value_template: "{{ (trigger_entity_state_off and states(trigger_entity) | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true)) or (not trigger_entity_state_off and states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true))) }}"
+            value_template: "{{ (trigger_entity_state_off and states(trigger_entity) | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true)) or (not trigger_entity_state_off and states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true)) }}"
           - condition: template
             # When it's not blocked by timeout_blocker_entity.
             value_template: "{{ not timeout_blocker_entity or not (states(timeout_blocker_entity) | regex_match('^('+ timeout_blocker_entity_state | trim +')$', ignorecase=true)) }}"
