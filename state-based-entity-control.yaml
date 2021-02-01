@@ -50,6 +50,7 @@ blueprint:
         If this value is left empty, it will default to "on". 
         This value supports regular expression, 
         i.e. you can list multiple values as "state_1|state_2|state_3".
+      default:
       selector:
         entity:
           domain: input_text
