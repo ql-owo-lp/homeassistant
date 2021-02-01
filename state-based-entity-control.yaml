@@ -204,11 +204,9 @@ variables:
   trigger_entity_state: "{{ _trigger_entity_state | default('on', true) | trim }}"
   _trigger_entity_state_off: !input trigger_entity_state_off
   trigger_entity_state_off: "{{ _trigger_entity_state_off | default('', true) | trim }}"
-  _trigger_timeout: !input trigger_timeout
-  trigger_timeout: {{ _trigger_timeout | int(30) }}
+  trigger_timeout: !input trigger_timeout
   illuminance_sensor: !input illuminance_sensor
-  _illuminance_below: !input illuminance_below
-  illuminance_below: {{ _illuminance_below | int(-1) }}
+  illuminance_below: !input illuminance_below
   blocker_entity: !input blocker_entity
   blocker_entity_state: !input blocker_entity_state
   timeout_blocker_entity: !input timeout_blocker_entity
@@ -229,15 +227,8 @@ variables:
           {% endif %}
         {% endif %}
       {% endfor %}
-  trigger_timeout: >-
-    {% set timeout = _alt_trigger_timeout | default(_trigger_timeout, true) %}
-    {% if timeout | int(-1) < 0 %}
-      {{ timeout }}
-    {% else %}
-      {{ timeout | int }}
-    {% endif %}
-  _sun_elevation_below: !input sun_elevation_below
-  sun_elevation_below: {{ _sun_elevation_below | int(-91) }}
+  trigger_timeout: "{{ _alt_trigger_timeout | default(_trigger_timeout, true) | int(30) }}"
+  sun_elevation_below: !input sun_elevation_below
   
 trigger:
   - platform: event
@@ -280,9 +271,9 @@ action:
               - condition: template
                 value_template: "{{ not illuminance_sensor and sun_elevation_below != none }}"
               - condition: template
-                value_template: "{{ illuminance_sensor and states(illuminance_sensor) | int < illuminance_below }}"
+                value_template: "{{ illuminance_sensor and states(illuminance_sensor) | int < illuminance_below | int(-1) }}"
               - condition: template
-                value_template: "{{ sun_elevation_below > -91 and state_attr('sun.sun', 'elevation') | int <= sun_elevation_below }}"
+                value_template: "{{ sun_elevation_below > -91 and state_attr('sun.sun', 'elevation') | int <= sun_elevation_below | int(-91) }}"
         sequence:
           - service: logbook.log
             # Add a logbook entry to indicate what triggered this action.
@@ -313,7 +304,7 @@ action:
               name: "{{ state_attr(target_entity_off, 'friendly_name') }}"
               message: "will execute service {{ target_entity_action_off }} after {{ trigger_timeout }} seconds/time"
               entity_id: "{{ target_entity_off }}"
-          - delay: {{ trigger_timeout }}
+          - delay: "{{ trigger_timeout }}"
           - service: logbook.log
             # Add a logbook entry to indicate what triggered this action.
             data_template:
