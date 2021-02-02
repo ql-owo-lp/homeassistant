@@ -17,7 +17,7 @@ blueprint:
         If this value is left empty, it will default to "on". 
         This value supports regular expression, 
         i.e. you can list multiple values as "state_1|state_2|state_3".
-      default:
+      default: on
       selector:
         entity:
           domain: input_text
@@ -46,10 +46,12 @@ blueprint:
         When the target entity state is of this value, 
         the target entity is considered turned on. 
         When this value is left empty, this automation 
-        will be triggered only based on trigger entity's state.
+        will be triggered only based on trigger entity's state,
+        which means target entity won't be turned off if it's
+        manually turned on.
         This value supports regular expression, 
         i.e. you can list multiple values as "state_1|state_2|state_3".
-      default:
+      default: on
       selector:
         entity:
           domain: input_text
@@ -58,7 +60,7 @@ blueprint:
       description: >-
         Action that will change target entity's state to desired state.
         If this value is left empty, it will default to "homeassistant.turn_on".
-      default:
+      default: homeassistant.turn_on
       selector:
         entity:
           domain: input_text
@@ -69,7 +71,7 @@ blueprint:
         It doesn't necessary have to set the entity's state to 'off', 
         as long as it's not the desired state it will be fine.
         If this value is left empty, it will default to "homeassistant.turn_off".
-      default:
+      default: homeassistant.turn_off
       selector:
         entity:
           domain: input_text
@@ -164,7 +166,7 @@ blueprint:
         You can also put the time as "HH:MM:SS". i.e. "01:02:03" means 
         one hour two mintues three seconds.
         If left empty, by default this will be 30 seconds.
-      default:
+      default: 30
       selector:
         entity:
           domain: input_text
