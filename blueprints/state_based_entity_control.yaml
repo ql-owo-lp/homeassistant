@@ -170,7 +170,7 @@ blueprint:
       selector:
         entity:
           domain: input_text
-    alt_trigger_timeout:
+    alt_trigger_timeouts:
       name: (OPTIONAL) Alternate Trigger Timeout
       description: >-
         Alternate trigger timeout values to use besides the main trigger 
@@ -215,10 +215,10 @@ variables:
   timeout_blocker_entity: !input timeout_blocker_entity
   _timeout_blocker_entity_state: !input timeout_blocker_entity_state
   timeout_blocker_entity_state: "{{ (_timeout_blocker_entity_state or '') | trim }}"
-  _alt_trigger_timeout_input: !input alt_trigger_timeout
+  _alt_trigger_timeouts: !input alt_trigger_timeouts
   _alt_trigger_timeout: >-
       {% set current_time = now().strftime("%H:%M:%S")  %}
-      {% for alt in (_alt_trigger_timeout_input or '').split(';') if alt %}
+      {% for alt in (_alt_trigger_timeouts or '').split(';') if alt %}
         {% set val = alt.split(',') %}
         {% if val | length == 2 and val[0] %}
           {% set t = val[0].split('-') %}
