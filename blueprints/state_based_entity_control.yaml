@@ -47,7 +47,6 @@ blueprint:
         the target entity is considered turned on. 
         When this value is left empty, this automation 
         will be triggered only based on trigger entity's state.
-        If this value is left empty, it will default to "on". 
         This value supports regular expression, 
         i.e. you can list multiple values as "state_1|state_2|state_3".
       default:
@@ -195,7 +194,7 @@ variables:
   _target_entity_off: !input target_entity_off
   target_entity_off: "{{ _target_entity_off | default(target_entity, true) | trim }}"
   _target_entity_state: !input target_entity_state
-  target_entity_state: "{{ _target_entity_state | default('on', true) | trim }}"
+  target_entity_state: "{{ (_target_entity_state or '') | trim }}"
   _target_entity_action_on: !input target_entity_action_on
   target_entity_action_on: "{{ _target_entity_action_on | default('homeassistant.turn_on', true) | trim }}"
   _target_entity_action_off: !input target_entity_action_off
@@ -209,9 +208,11 @@ variables:
   illuminance_sensor: !input illuminance_sensor
   illuminance_below: !input illuminance_below
   blocker_entity: !input blocker_entity
-  blocker_entity_state: !input blocker_entity_state
+  _blocker_entity_state: !input blocker_entity_state
+  blocker_entity_state: "{{ (_blocker_entity_state or '') | trim }}"
   timeout_blocker_entity: !input timeout_blocker_entity
-  timeout_blocker_entity_state: !input timeout_blocker_entity_state
+  _timeout_blocker_entity_state: !input timeout_blocker_entity_state
+  timeout_blocker_entity_state: "{{ (_timeout_blocker_entity_state or '') | trim }}"
   _alt_trigger_timeout_input: !input alt_trigger_timeout
   _alt_trigger_timeout: >-
       {% set current_time = now().strftime("%H:%M:%S")  %}
@@ -266,16 +267,16 @@ action:
             # This prevent the rule from turning on target entity that is turned off manually from UI/App or from physical switch, even though the trigger entity's state is not cleared.
             value_template: "{{ not trigger or (trigger.platform == 'state' and trigger.entity_id != target_entity) }}"
           - condition: template
+            value_template: "{{ (illuminance_sensor and states(illuminance_sensor) | int(99999) <= illuminance_below | int(-1)) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
+          - condition: template
             # When target entity is not "on".
-            value_template: "{{ not (states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true)) }}"
+            value_template: "{{ not target_entity_state or not (states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true)) }}"
           - condition: template
             # When trigger entity is "on".
             value_template: "{{ states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) }}"
           - condition: template
             # When it's not blocked by blocker_entity.
-            value_template: "{{ not blocker_entity or not states(blocker_entity) | regex_match('^('+ blocker_entity_state | trim +')$', ignorecase=true) }}"
-          - condition: template
-            value_template: "{{ (illuminance_sensor and states(illuminance_sensor) | int(99999) <= illuminance_below | int(-1)) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
+            value_template: "{{ not blocker_entity or not states(blocker_entity) | regex_match('^('+ blocker_entity_state +')$', ignorecase=true) }}"
         sequence:
           - service: logbook.log
             # Add a logbook entry to indicate what triggered this action.
@@ -295,7 +296,7 @@ action:
             value_template: "{{ (trigger_entity_state_off and states(trigger_entity) | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true)) or (not trigger_entity_state_off and not states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true)) }}"
           - condition: template
             # When it's not blocked by timeout_blocker_entity.
-            value_template: "{{ not timeout_blocker_entity or not states(timeout_blocker_entity) | regex_match('^('+ timeout_blocker_entity_state | trim +')$', ignorecase=true) }}"
+            value_template: "{{ not timeout_blocker_entity or not states(timeout_blocker_entity) | regex_match('^('+ timeout_blocker_entity_state +')$', ignorecase=true) }}"
         sequence:
           # We don't need to do a "wait for trigger" action.
           # As we listen to any state change of the motion_sensor/target_entity,
@@ -308,7 +309,7 @@ action:
                   will execute service {{ target_entity_action_off }} after {{ trigger_timeout }}
                   {% if trigger_timeout | int(-1) == -1 %}
                     seconds
-                  {% endif %}
+                  {% endif %}.
               entity_id: "{{ target_entity_off }}"
           - delay: "{{ trigger_timeout }}"
           - service: logbook.log
