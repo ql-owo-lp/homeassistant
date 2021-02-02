@@ -309,9 +309,14 @@ action:
               name: "{{ state_attr(target_entity_off, 'friendly_name') }}"
               message: >-
                   will execute service {{ target_entity_action_off }} after {{ trigger_timeout }}
-                  {% if trigger_timeout | int(-1) == -1 %}
-                    seconds
-                  {% endif %}.
+                  {% set num_timeout = trigger_timeout | int(-1) %}
+                  {% if num_timeout > 1 %}
+                    seconds.
+                  {% elif num_timeout >= 0 %}
+                    second.
+                  {% else %}
+                    .
+                  {% endif %}
               entity_id: "{{ target_entity_off }}"
           - delay: "{{ trigger_timeout }}"
           - service: logbook.log
