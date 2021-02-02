@@ -200,7 +200,7 @@ variables:
   _target_entity_action_on: !input target_entity_action_on
   target_entity_action_on: "{{ _target_entity_action_on | default('homeassistant.turn_on', true) | trim }}"
   _target_entity_action_off: !input target_entity_action_off
-  target_entity_action_off: "{{ _target_entity_action_on | default('homeassistant.turn_off', true) | trim }}"
+  target_entity_action_off: "{{ _target_entity_action_off | default('homeassistant.turn_off', true) | trim }}"
   trigger_entity: !input trigger_entity
   _trigger_entity_state: !input trigger_entity_state
   trigger_entity_state: "{{ _trigger_entity_state | default('on', true) | trim }}"
