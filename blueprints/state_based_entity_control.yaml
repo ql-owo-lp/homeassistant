@@ -191,6 +191,8 @@ blueprint:
         entity:
           domain: input_text
 
+mode: restart
+
 variables:
   target_entity: !input target_entity
   _target_entity_off: !input target_entity_off
@@ -261,11 +263,13 @@ trigger:
     # Prevent this automation from triggerring if the light was on and off immediately.
     for:
       seconds: 3
+
 condition:
   - condition: template
     # Trigger entity (sensor) must be active. If it's not connected due to dead battery or connectivity issue, we shouldn't execute this automation.
     # Thus the target can still be operated manually.
     value_template: "{{ states(trigger_entity) != 'unknown' and not is_state(trigger_entity, 'unavailable') }}"
+
 action:
   - choose:
       - conditions:
@@ -333,4 +337,3 @@ action:
             data_template:
               entity_id: "{{ target_entity_off }}"
     default: []
-mode: restart
