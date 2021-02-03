@@ -45,7 +45,7 @@ blueprint:
       description: >-
         When the target entity state is of this value, 
         the target entity is considered turned on. 
-        When this value is left empty, this automation 
+        When this value is set to 'none', the automation 
         will be triggered only based on trigger entity's state,
         which means target entity won't be turned off if it's
         manually turned on.
@@ -196,7 +196,11 @@ variables:
   _target_entity_off: !input target_entity_off
   target_entity_off: "{{ _target_entity_off | default(target_entity, true) | trim }}"
   _target_entity_state: !input target_entity_state
-  target_entity_state: "{{ (_target_entity_state or '') | trim }}"
+  target_entity_state: >-
+      {% set st = _target_entity_state or '' | trim %}
+      {% if not target_entity | regex_match('^(scene|script)\..+', ignorecase=true) and st != 'none' %}
+        {{ st }}
+      {% endif %}
   _target_entity_action_on: !input target_entity_action_on
   target_entity_action_on: "{{ _target_entity_action_on | default('homeassistant.turn_on', true) | trim }}"
   _target_entity_action_off: !input target_entity_action_off
@@ -271,7 +275,7 @@ action:
           - condition: template
             value_template: "{{ (illuminance_sensor and states(illuminance_sensor) | int(99999) <= illuminance_below | int(-1)) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
           - condition: template
-            # When target entity is not "on".
+            # When target_entity_state is ignored, or target entity is not "on".
             value_template: "{{ not target_entity_state or not (states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true)) }}"
           - condition: template
             # When trigger entity is "on".
