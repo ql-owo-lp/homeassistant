@@ -200,7 +200,7 @@ variables:
   _target_entity_state: !input target_entity_state
   target_entity_state: >-
       {% set st = _target_entity_state or '' | trim %}
-      {% if not target_entity | regex_match('^(scene|script)\..+', ignorecase=true) and st != 'none' %}
+      {% if st != 'none' and not target_entity | regex_match('^(scene|script)\..+', ignorecase=true) %}
         {{ st }}
       {% endif %}
   _target_entity_action_on: !input target_entity_action_on
