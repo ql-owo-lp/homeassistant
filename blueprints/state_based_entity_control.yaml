@@ -336,4 +336,3 @@ action:
           - service_template: "{{ target_entity_action_off }}"
             data_template:
               entity_id: "{{ target_entity_off }}"
-    default: []
