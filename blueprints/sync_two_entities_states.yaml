@@ -1,5 +1,5 @@
 blueprint:
-  name: Synchronize States
+  name: Synchronize Two Entities' States
   description: "Synchronize the on/off state of 2 entities"
   domain: automation
   input:
