@@ -1,0 +1,108 @@
+blueprint:
+  name: Control Entity Using Sensor with Numberic States
+  description: "Control Entity Using Sensor with Numberic States"
+  domain: automation
+  input:
+    target_entity:
+      name: Target Entity
+      description: >-
+        Target entity to control. e.g., heater, cooler
+      selector:
+        entity:
+    sensor_entity:
+      name: Sensor Entity
+      description: >-
+        Sensor entity, which returns a number.
+      default:
+      selector:
+        entity:
+    upper_bound:
+      name: Upper Bound
+      description: >-
+        When sensor entity reaches upper bound, the target will be turned off.
+      default:
+      selector:
+        entity:
+          domain: input_number
+    lower_bound:
+      name: Lower Bound
+      description: >-
+        When sensor entity reaches lower bound, the target will be turned on.
+      default:
+      selector:
+        entity:
+          domain: input_number
+    start_time:
+      name: Start Time
+      description: >-
+        When to start this automation.
+      default:
+      selector:
+        entity:
+          domain: input_datetime
+    end_time:
+      name: End Time
+      description: >-
+        When to end this automation.
+      default:
+      selector:
+        entity:
+          domain: input_datetime
+    up_action:
+      name: Turn On Action
+      description: >-
+        What service to run when sensor entity returns a value that is lower than lower bound.
+      default: 'homeassistant.turn_on'
+      selector:
+        entity:
+          domain: input_text
+    down_action:
+      name: Turn Off Action
+      description: >-
+        What service to run when sensor entity returns a value that is higher than upper bound.
+      default: 'homeassistant.turn_off'
+      selector:
+        entity:
+          domain: input_text
+trigger:
+  - platform: numeric_state
+    entity_id: !input "sensor_entity"
+    below: !input "lower_bound"
+    for: !input "lower_bound_delay"
+  - platform: numeric_state
+    entity_id: !input "sensor_entity"
+    above: !input "upper_bound"
+    for: !input "upper_bound_delay"
+  - platform: time
+    at: !input "end_time"
+  - platform: time
+    at: !input "start_time"
+  - platform: event
+    event_type: automation_reloaded
+  - platform: homeassistant
+    event: start
+action:
+  - choose:
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input "sensor_entity"
+            below: !input "lower_bound"
+        sequence:
+          - service_template: !input "up_action"
+            data_template:
+                entity_id: !input "target_entity"
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input "sensor_entity"
+            above: !input "upper_bound"
+        sequence:
+          - service_template: !input "down_action"
+            data_template:
+                entity_id: !input "target_entity"
+    - condition: time
+      after: !input "end_time"
+      before: !input "start_time"
+    - service_template: !input "end_action"
+      data_template:
+        entity_id: !input "target_entity"
+mode: restart
