@@ -62,11 +62,11 @@ trigger:
     for: !input 'backward_sync_delay'
 condition:
   - condition: template
+    # Only support on/off.
+    value_template: '{{ trigger.to_state.state == "on" or trigger.to_state.state == "off" }}'
+  - condition: template
     # Entity state's not equal.
     value_template: '{{ states(main_entity) != states(secondary_entity) }}'
-  - condition: template
-    # Only support on/off.
-    value_template: '{{ trigger.to_state.state == 'on' and trigger.to_state.state == 'off' }}'
   - condition: template
     # If it's secondary entity's state change, then this must not be one-way sync.
     value_template: '{{ not (trigger.from_state.entity_id == secondary_entity && is_one_way_sync) }}'
