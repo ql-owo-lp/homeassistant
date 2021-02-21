@@ -1,6 +1,6 @@
 blueprint:
   name: Synchronize States
-  description: 'Synchronize the on/off state of 2 entities'
+  description: "Synchronize the on/off state of 2 entities"
   domain: automation
   input:
     main_entity:
@@ -33,44 +33,54 @@ blueprint:
         state.
         If any of main entity or secondary entity's state got changed, this sync
         will be canceled.
-      default: 0
+      default: "00:00:00"
       selector:
         entity:
           domain: input_text
-    backward_sync_delay:
-      name: Sync Delay
+    backwards_sync_delay:
+      name: Backwards Sync Delay
       description: >-
         Delay before we set main entity's state to secondary entity's current 
         state.
         If any of main entity or secondary entity's state got changed, this sync
         will be canceled.
-      default: 0
+      default: "00:00:00"
+      selector:
+        entity:
+          domain: input_text
+    off_delay:
+      name: Off Sync Delay
+      description: >-
+        Delay before we turnning both entitys of due to state change.
+      default: "00:01:00"
       selector:
         entity:
           domain: input_text
 mode: restart
 variables:
-  main_entity: !input 'main_entity'
-  secondary_entity: !input 'secondary_entity'
-  is_one_way_sync: !input 'is_one_way_sync'
+  main_entity: !input "main_entity"
+  secondary_entity: !input "secondary_entity"
+  is_one_way_sync: !input "is_one_way_sync"
+  off_delay: !input "off_delay"
 trigger:
   - platform: state
-    entity_id: !input 'main_entity'
-    for: !input 'forward_sync_delay'
+    entity_id: !input "main_entity"
+    for: !input "forward_sync_delay"
   - platform: state
-    entity_id: !input 'secondary_entity'
-    for: !input 'backward_sync_delay'
+    entity_id: !input "secondary_entity"
+    for: !input "backward_sync_delay"
 condition:
   - condition: template
     # Only support on/off.
-    value_template: '{{ trigger.to_state.state == "on" or trigger.to_state.state == "off" }}'
+    value_template: "{{ trigger.to_state.state == 'on' or trigger.to_state.state == 'off' }}"
   - condition: template
     # Entity state's not equal.
-    value_template: '{{ states(main_entity) != states(secondary_entity) }}'
+    value_template: "{{ states(main_entity) != states(secondary_entity) }}"
   - condition: template
     # If it's secondary entity's state change, then this must not be one-way sync.
-    value_template: '{{ not (trigger.from_state.entity_id == secondary_entity && is_one_way_sync) }}'
+    value_template: "{{ not (trigger.from_state.entity_id == secondary_entity && is_one_way_sync) }}"
 action:
-  - service: homeassistant.turn_{{ trigger.to_state.state }}
-    data:
-      entity_id: '{% if trigger.from_state.entity_id == main_entity %} {{ secondary_entity }} {% else %} {{ main_entity }} {% endif %}'
+  - delay: "{% if trigger.to_state.state == 'off' %} {{ off_delay }} {% else %} {{ 0 }} {% endif %}"
+  - service_template: "homeassistant.turn_{{ trigger.to_state.state }}"
+    data_template:
+      entity_id: "{% if trigger.from_state.entity_id == main_entity %} {{ secondary_entity }} {% else %} {{ main_entity }} {% endif %}"
