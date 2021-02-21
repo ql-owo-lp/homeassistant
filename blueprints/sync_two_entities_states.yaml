@@ -68,7 +68,7 @@ trigger:
     for: !input "forward_sync_delay"
   - platform: state
     entity_id: !input "secondary_entity"
-    for: !input "backward_sync_delay"
+    for: !input "backwards_sync_delay"
 condition:
   - condition: template
     # Only support on/off.
