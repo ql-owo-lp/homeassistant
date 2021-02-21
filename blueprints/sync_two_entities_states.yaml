@@ -22,7 +22,7 @@ blueprint:
         This synchronization will be one-way if this is set to 'true'. It means
         the automation will only set secondary entity's state to main entity's
         current state when main entity's state changes.
-      default: false
+      default: 'false'
       selector:
         entity:
           domain: input_boolean
@@ -78,7 +78,7 @@ condition:
     value_template: "{{ states(main_entity) != states(secondary_entity) }}"
   - condition: template
     # If it's secondary entity's state change, then this must not be one-way sync.
-    value_template: "{{ not (trigger.from_state.entity_id == secondary_entity && is_one_way_sync) }}"
+    value_template: "{{ not (trigger.from_state.entity_id == secondary_entity && is_one_way_sync | lower == 'true') }}"
 action:
   - delay: "{% if trigger.to_state.state == 'off' %} {{ off_delay }} {% else %} {{ 0 }} {% endif %}"
   - service_template: "homeassistant.turn_{{ trigger.to_state.state }}"
