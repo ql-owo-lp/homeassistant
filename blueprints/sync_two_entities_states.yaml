@@ -52,7 +52,7 @@ blueprint:
       name: Off Sync Delay
       description: >-
         Delay before we turnning both entitys of due to state change.
-      default: "00:01:00"
+      default: "00:00:00"
       selector:
         entity:
           domain: input_text
