@@ -20,7 +20,6 @@ blueprint:
       name: Upper Bound
       description: >-
         When sensor entity reaches upper bound, the target will be turned off.
-      default:
       selector:
         entity:
           domain: input_number
@@ -28,7 +27,6 @@ blueprint:
       name: Lower Bound
       description: >-
         When sensor entity reaches lower bound, the target will be turned on.
-      default:
       selector:
         entity:
           domain: input_number
@@ -119,7 +117,6 @@ trigger:
     event: start
 
 action:
-  - delay: "{{ time_ranged_delay }}"
   - choose:
       - conditions:
         - condition: template
@@ -133,7 +130,8 @@ action:
             entity_id: !input "sensor_entity"
             below: !input "lower_bound"
         sequence:
-          - service_template: !input "up_action"
+          - delay: "{{ time_ranged_delay }}"
+          - service_template: !input "turn_on_action"
             data_template:
                 entity_id: !input "target_entity"
       - conditions:
@@ -141,6 +139,7 @@ action:
             entity_id: !input "sensor_entity"
             above: !input "upper_bound"
         sequence:
-          - service_template: !input "down_action"
+          - delay: "{{ time_ranged_delay }}"
+          - service_template: !input "turn_off_action"
             data_template:
                 entity_id: !input "target_entity"
