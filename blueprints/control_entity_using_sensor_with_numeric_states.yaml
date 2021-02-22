@@ -32,57 +32,102 @@ blueprint:
       selector:
         entity:
           domain: input_number
-    start_time:
-      name: Start Time
+    time_ranges:
+      name: Time Intervals
       description: >-
-        When to start this automation.
-      default:
+        Time intervals when this automation will be executed, along with delay before running the action.
+        Follow format 
+        "time_start_1-time_end_1,delay_1;
+        time_start_2-time_end_2,delay_2;more times"
+        Use "HH:MM:SS" for "alternate_time_start" and "alternate_time_end".
+        Time ranges must not overlap.
+        Delay can either be a number (meaning timeout in seconds), or
+        "HH:MM:SS" value.
+        e.g.
+        "17:00:00-19:30:00,30;19:30:00-20:00:00,00:20:00;23:00:00-1:00:00,60" means from 17:00:00 to 19:30:00,
+        use 30 seconds as delay; from 19:30:00 to 20:00:00, use 20 minutes as delay; 
+        from 23:00:00 to 1:00:00, use 60 seconds as delay.
+        Leave this empty will means the automation will be enabled all the time.
       selector:
         entity:
-          domain: input_datetime
-    end_time:
-      name: End Time
-      description: >-
-        When to end this automation.
-      default:
-      selector:
-        entity:
-          domain: input_datetime
-    up_action:
+          domain: input_text
+    turn_on_action:
       name: Turn On Action
       description: >-
         What service to run when sensor entity returns a value that is lower than lower bound.
+        Be default this is 'homeassistant.turn_on', which is expected to cause sensor returnning a higher value later.
+        If you are running a cooler, change this to 'homeassistant.turn_off'.
       default: 'homeassistant.turn_on'
       selector:
         entity:
           domain: input_text
-    down_action:
+    turn_off_action:
       name: Turn Off Action
+      description: >-
+        What service to run when sensor entity returns a value that is higher than upper bound.
+        Be default this is 'homeassistant.turn_off', which is expected to cause sensor returnning a higher value later.
+        If you are running a cooler, change this to 'homeassistant.turn_on'.
+      default: 'homeassistant.turn_off'
+      selector:
+        entity:
+          domain: input_text
+    end_action:
+      name: Time Range End Action
       description: >-
         What service to run when sensor entity returns a value that is higher than upper bound.
       default: 'homeassistant.turn_off'
       selector:
         entity:
           domain: input_text
+
+mode: restart
+
+variables:
+  _time_ranges: !input "time_ranges"
+  _time_ranged_delay: >-
+      {% set current_time = now().strftime("%H:%M:%S")  %}
+      {% for tr in (_time_ranges or '').split(';') if tr %}
+        {% set val = tr.split(',') %}
+        {% if val | length == 2 and val[0] %}
+          {% set t = val[0].split('-') %}
+          {% if t | length == 2 %}
+            {% if t[0] < t[1] and t[0] <= current_time and t[1] > current_time %}
+              {{ val[1] | default(0, true) }}
+            {% elif t[0] > t[1] and (current_time > t[1] or current_time < t[0]) %}
+              {{ val[1] | default(0, true) }}
+            {% endif %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+  time_ranged_delay: >-
+      {% if _time_ranged_delay or _time_ranged_delay == 0 %}
+        {{ _time_ranged_delay }}
+      {% else %}
+        {{ false }}
+      {% endif %}
+      
 trigger:
   - platform: numeric_state
     entity_id: !input "sensor_entity"
     below: !input "lower_bound"
-    for: !input "lower_bound_delay"
   - platform: numeric_state
     entity_id: !input "sensor_entity"
     above: !input "upper_bound"
-    for: !input "upper_bound_delay"
-  - platform: time
-    at: !input "end_time"
-  - platform: time
-    at: !input "start_time"
   - platform: event
     event_type: automation_reloaded
   - platform: homeassistant
     event: start
+
 action:
+  - delay: "{{ time_ranged_delay }}"
   - choose:
+      - conditions:
+        - condition: template
+          value_template: "{{ not time_ranged_delay and time_ranged_delay != 0 }}"
+        sequence:
+          - service_template: !input "end_action"
+            data_template:
+                entity_id: !input "target_entity"
       - conditions:
           - condition: numeric_state
             entity_id: !input "sensor_entity"
@@ -99,10 +144,3 @@ action:
           - service_template: !input "down_action"
             data_template:
                 entity_id: !input "target_entity"
-    - condition: time
-      after: !input "end_time"
-      before: !input "start_time"
-    - service_template: !input "end_action"
-      data_template:
-        entity_id: !input "target_entity"
-mode: restart
