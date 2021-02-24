@@ -92,8 +92,6 @@ variables:
           {% if val | length == 2 and val[0] %}
             {% set t = val[0].split('-') %}
             {% if t | length == 2 %}
-            {{t[0] < t[1] and t[0] <= current_time and t[1] > current_time}}
-            {{ t[0] > t[1] and (current_time > t[0] or current_time < t[1])}}
               {% if t[0] == t[1] or
                     (t[0] < t[1] and t[0] <= current_time and current_time <= t[1]) or
                     (t[0] > t[1] and (current_time >= t[0] or current_time <= t[1]))
