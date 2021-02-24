@@ -223,24 +223,25 @@ variables:
   timeout_blocker_entity_state: "{{ (_timeout_blocker_entity_state or '') | trim }}"
   _alt_trigger_timeouts: !input alt_trigger_timeouts
   _alt_trigger_timeout: >-
+      {% set _alt_trigger_timeouts = _alt_trigger_timeouts | replace(' ', '') %}
       {% set current_time = now().strftime("%H:%M:%S")  %}
-      {% for alt in (_alt_trigger_timeouts | trim or '').split(';') if alt %}
-        {% set val = (alt | trim).split(',') %}
+      {% for alt in (_alt_trigger_timeouts or '').split(';') if alt %}
+        {% set val = alt.split(',') %}
         {% if val | length == 2 and val[0] %}
-          {% set t = (val[0] | trim).split('-') %}
+          {% set t = val[0].split('-') %}
           {% if t | length == 2 %}
             {% if t[0] == t[1] or
                   (t[0] < t[1] and t[0] <= current_time and current_time <= t[1]) or
                   (t[0] > t[1] and (current_time >= t[0] or current_time <= t[1]))
             %}
-              {{ val[1] | trim | default(0, true) }}
+              {{ val[1] | default(0, true) }}
             {% endif %}
           {% endif %}
         {% endif %}
       {% endfor %}
   trigger_timeout: >-
-      {% set _alt_trigger_timeout = _alt_trigger_timeout | trim %}
-      {% set _trigger_timeout = _trigger_timeout | trim %}
+      {% set _alt_trigger_timeout = _alt_trigger_timeout | replace(' ', '') %}
+      {% set _trigger_timeout = _trigger_timeout | replace(' ', '') %}
       {% if _alt_trigger_timeout or _alt_trigger_timeout == 0 %}
         {{ _alt_trigger_timeout }}
       {% elif _trigger_timeout or _trigger_timeout == 0 %}
