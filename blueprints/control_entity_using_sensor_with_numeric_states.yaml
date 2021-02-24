@@ -83,20 +83,27 @@ mode: restart
 variables:
   _time_ranges: !input "time_ranges"
   _time_ranged_delay: >-
-      {% set current_time = now().strftime("%H:%M:%S")  %}
-      {% for tr in (_time_ranges or '').split(';') if tr %}
-        {% set val = tr.split(',') %}
-        {% if val | length == 2 and val[0] %}
-          {% set t = val[0].split('-') %}
-          {% if t | length == 2 %}
-            {% if t[0] < t[1] and t[0] <= current_time and t[1] > current_time %}
-              {{ val[1] | default(0, true) }}
-            {% elif t[0] > t[1] and (current_time > t[1] or current_time < t[0]) %}
-              {{ val[1] | default(0, true) }}
+      {% set delay = _time_ranges | int(-1) %}
+      {% if delay >= 0 %}
+        {{ delay }}
+      {% else %}
+        {% for tr in (_time_ranges or '').split(';') if tr %}
+          {% set val = tr.split(',') %}
+          {% if val | length == 2 and val[0] %}
+            {% set t = val[0].split('-') %}
+            {% if t | length == 2 %}
+            {{t[0] < t[1] and t[0] <= current_time and t[1] > current_time}}
+            {{ t[0] > t[1] and (current_time > t[0] or current_time < t[1])}}
+              {% if t[0] == t[1] or
+                    (t[0] < t[1] and t[0] <= current_time and current_time <= t[1]) or
+                    (t[0] > t[1] and (current_time >= t[0] or current_time <= t[1]))
+              %}
+                {{ val[1] | default(0, true) }}
+              {% endif %}
             {% endif %}
           {% endif %}
-        {% endif %}
-      {% endfor %}
+        {% endfor %}
+      {% endif %}
   time_ranged_delay: >-
       {% if _time_ranged_delay or _time_ranged_delay == 0 %}
         {{ _time_ranged_delay }}
