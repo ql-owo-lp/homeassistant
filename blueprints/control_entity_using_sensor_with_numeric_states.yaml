@@ -111,12 +111,8 @@ variables:
       {% endif %}
       
 trigger:
-  - platform: numeric_state
+  - platform: state
     entity_id: !input "sensor_entity"
-    below: !input "lower_bound"
-  - platform: numeric_state
-    entity_id: !input "sensor_entity"
-    above: !input "upper_bound"
   - platform: event
     event_type: automation_reloaded
   - platform: homeassistant
