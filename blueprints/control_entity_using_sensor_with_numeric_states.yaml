@@ -49,6 +49,15 @@ blueprint:
       selector:
         entity:
           domain: input_text
+    time_range_check_interval:
+      name: Time Range Check Interval
+      description: >-
+        Interval (in minutes) to check if the target entity should be turned off due to out of defined time ranges.
+        '/5' means every five minutes.
+      default: '/5'
+      selector:
+        entity:
+          domain: input_number
     target_on_state:
       name: Target On State
       description: >-
@@ -118,8 +127,14 @@ variables:
   upper_bound: !input "upper_bound"
 
 trigger:
-  - platform: state
+  - platform: numeric_state
     entity_id: !input "sensor_entity"
+    below: !input "lower_bound"
+  - platform: numeric_state
+    entity_id: !input "sensor_entity"
+    above: !input "upper_bound"
+  - platform: time_pattern
+    minutes: !input "time_range_check_interval"
   - platform: event
     event_type: automation_reloaded
   - platform: homeassistant
