@@ -49,36 +49,37 @@ blueprint:
       selector:
         entity:
           domain: input_text
-    turn_on_action:
-      name: Turn On Action
+    target_on_state:
+      name: Target On State
       description: >-
-        What service to run when sensor entity returns a value that is lower than lower bound.
-        Be default this is 'homeassistant.turn_on', which is expected to cause sensor returnning a higher value later.
-        If you are running a cooler, change this to 'homeassistant.turn_off'.
-      default: 'homeassistant.turn_on'
+        What state the target entity should be at when sensor entity returns a value that is lower than lower bound.
+        Be default this is 'on', which is expected to cause sensor returnning a higher value later.
+        If you are running a cooler, change this to 'off'.
+      default: 'on'
       selector:
         entity:
           domain: input_text
-    turn_off_action:
-      name: Turn Off Action
+    target_off_state:
+      name: Target Off State
       description: >-
-        What service to run when sensor entity returns a value that is higher than upper bound.
-        Be default this is 'homeassistant.turn_off', which is expected to cause sensor returnning a higher value later.
-        If you are running a cooler, change this to 'homeassistant.turn_on'.
-      default: 'homeassistant.turn_off'
+        What state the target entity should be at when sensor entity returns a value that is higher than upper bound.
+        Be default this is 'off', which is expected to cause sensor returnning a higher value later.
+        If you are running a cooler, change this to 'on'.
+      default: 'off'
       selector:
         entity:
           domain: input_text
-    end_action:
-      name: Time Range End Action
+    time_end_state:
+      name: Time Range End State
       description: >-
-        What service to run when sensor entity returns a value that is higher than upper bound.
-      default: 'homeassistant.turn_off'
+        What state the target entity should be at when it's out of specified time ranges.
+      default: 'off'
       selector:
         entity:
           domain: input_text
 
-mode: restart
+mode: queued
+max: 2
 
 variables:
   _time_ranges: !input "time_ranges"
@@ -109,7 +110,13 @@ variables:
       {% else %}
         {{ false }}
       {% endif %}
-      
+  target_entity: !input "target_entity"
+  target_on_state: !input "target_on_state"
+  target_off_state: !input "target_off_state"
+  time_end_state: !input "time_end_state"
+  lower_bound: !input "lower_bound"
+  upper_bound: !input "upper_bound"
+
 trigger:
   - platform: state
     entity_id: !input "sensor_entity"
@@ -124,24 +131,71 @@ action:
         - condition: template
           value_template: "{{ not time_ranged_delay and time_ranged_delay != 0 }}"
         sequence:
-          - service_template: !input "end_action"
+          - condition: template
+            value_template: "{{ not is_state(target_entity, time_end_state) }}"
+          - service: logbook.log
+            # Add a logbook entry to indicate what triggered this action.
             data_template:
-                entity_id: !input "target_entity"
+              name: "{{ state_attr(target_entity, 'friendly_name') }}"
+              message: "is set to {{ time_end_state }} due to out of defined time range"
+          - service_template: "homeassistant.turn_{{ time_end_state }}"
+            data_template:
+                entity_id: "{{ target_entity }}"
       - conditions:
           - condition: numeric_state
             entity_id: !input "sensor_entity"
-            below: !input "lower_bound"
+            below: "{{ lower_bound | int(-999999999) }}"
         sequence:
-          - delay: "{{ time_ranged_delay }}"
-          - service_template: !input "turn_on_action"
+          - condition: template
+            value_template: "{{ not is_state(target_entity, target_on_state) }}"
+          - service: logbook.log
+            # Add a logbook entry to indicate what triggered this action.
             data_template:
-                entity_id: !input "target_entity"
+              name: "{{ state_attr(target_entity, 'friendly_name') }}"
+              message: >-
+                  will be turned {{ target_on_state }} after {{ time_ranged_delay }}
+                  due to {{ state_attr(sensor_entity, 'friendly_name') }} returned
+                  {{ states(sensor_entity) }}, which is lower than defined value 
+                  {{ lower_bound }}.
+          - delay: "{{ time_ranged_delay }}"
+          - service: logbook.log
+            # Add a logbook entry to indicate what triggered this action.
+            data_template:
+              name: "{{ state_attr(target_entity, 'friendly_name') }}"
+              message: >-
+                  is turned {{ target_on_state }} due to 
+                  {{ state_attr(sensor_entity, 'friendly_name') }}
+                  returned {{ states(sensor_entity) }}, which is lower than
+                  defined value {{ lower_bound }}.
+          - service_template: "homeassistant.turn_{{ target_on_state }}"
+            data_template:
+                entity_id: "{{ target_entity }}"
       - conditions:
           - condition: numeric_state
             entity_id: !input "sensor_entity"
-            above: !input "upper_bound"
+            above: "{{ upper_bound | int(999999999) }}"
         sequence:
-          - delay: "{{ time_ranged_delay }}"
-          - service_template: !input "turn_off_action"
+          - condition: template
+            value_template: "{{ not is_state(target_entity, target_off_state) }}"
+          - service: logbook.log
+            # Add a logbook entry to indicate what triggered this action.
             data_template:
-                entity_id: !input "target_entity"
+              name: "{{ state_attr(target_entity, 'friendly_name') }}"
+              message: >-
+                  will be turned {{ target_off_state }} after {{ time_ranged_delay }}
+                  due to {{ state_attr(sensor_entity, 'friendly_name') }} returned
+                  {{ states(sensor_entity) }}, which is higher than defined value 
+                  {{ upper_bound }}.
+          - delay: "{{ time_ranged_delay }}"
+          - service: logbook.log
+            # Add a logbook entry to indicate what triggered this action.
+            data_template:
+              name: "{{ state_attr(target_entity, 'friendly_name') }}"
+              message: >-
+                  is turned {{ target_off_state }} due to 
+                  {{ state_attr(sensor_entity, 'friendly_name') }}
+                  returned {{ states(sensor_entity) }}, which is higher than
+                  defined value {{ upper_bound }}.
+          - service_template: "homeassistant.turn_{{ target_off_state }}"
+            data_template:
+                entity_id: "{{ target_entity }}"
