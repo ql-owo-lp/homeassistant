@@ -120,6 +120,7 @@ variables:
         {{ false }}
       {% endif %}
   target_entity: !input "target_entity"
+  sensor_entity: !input "sensor_entity"
   target_on_state: !input "target_on_state"
   target_off_state: !input "target_off_state"
   time_end_state: !input "time_end_state"
@@ -127,14 +128,16 @@ variables:
   upper_bound: !input "upper_bound"
 
 trigger:
-  - platform: numeric_state
+#   - platform: numeric_state
+#     entity_id: !input "sensor_entity"
+#     below: !input "lower_bound"
+#   - platform: numeric_state
+#     entity_id: !input "sensor_entity"
+#     above: !input "upper_bound"
+  - platform: state
     entity_id: !input "sensor_entity"
-    below: !input "lower_bound"
-  - platform: numeric_state
-    entity_id: !input "sensor_entity"
-    above: !input "upper_bound"
-  - platform: time_pattern
-    minutes: !input "time_range_check_interval"
+#   - platform: time_pattern
+#    minutes: !input "time_range_check_interval"
   - platform: event
     event_type: automation_reloaded
   - platform: homeassistant
@@ -157,9 +160,8 @@ action:
             data_template:
                 entity_id: "{{ target_entity }}"
       - conditions:
-          - condition: numeric_state
-            entity_id: !input "sensor_entity"
-            below: "{{ lower_bound | int(-999999999) }}"
+          - condition: template
+            value_template: "{{ states(sensor_entity) <= lower_bound }}"
         sequence:
           - condition: template
             value_template: "{{ not is_state(target_entity, target_on_state) }}"
@@ -186,9 +188,8 @@ action:
             data_template:
                 entity_id: "{{ target_entity }}"
       - conditions:
-          - condition: numeric_state
-            entity_id: !input "sensor_entity"
-            above: "{{ upper_bound | int(999999999) }}"
+          - condition: template
+            value_template: "{{ states(sensor_entity) >= upper_bound }}"
         sequence:
           - condition: template
             value_template: "{{ not is_state(target_entity, target_off_state) }}"
