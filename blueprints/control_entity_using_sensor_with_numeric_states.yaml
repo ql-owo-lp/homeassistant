@@ -98,6 +98,7 @@ variables:
       {% if delay >= 0 %}
         {{ delay }}
       {% else %}
+        {% set current_time = now().strftime("%H:%M:%S") %}
         {% for tr in (_time_ranges or '').split(';') if tr %}
           {% set val = tr.split(',') %}
           {% if val | length == 2 and val[0] %}
