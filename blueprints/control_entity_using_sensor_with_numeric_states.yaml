@@ -87,12 +87,11 @@ blueprint:
         entity:
           domain: input_text
 
-mode: queued
-max: 2
+mode: single
 
 variables:
   _time_ranges: !input "time_ranges"
-  _time_ranged_delay: >-
+  time_ranged_delay: >-
       {% set _time_ranges = _time_ranges | replace(' ', '') %}
       {% set delay = _time_ranges | int(-1) %}
       {% if delay >= 0 %}
@@ -113,12 +112,6 @@ variables:
             {% endif %}
           {% endif %}
         {% endfor %}
-      {% endif %}
-  time_ranged_delay: >-
-      {% if _time_ranged_delay or _time_ranged_delay == 0 %}
-        {{ _time_ranged_delay }}
-      {% else %}
-        {{ false }}
       {% endif %}
   target_entity: !input "target_entity"
   sensor_entity: !input "sensor_entity"
@@ -148,7 +141,8 @@ action:
   - choose:
       - conditions:
         - condition: template
-          value_template: "{{ not time_ranged_delay and time_ranged_delay != 0 }}"
+          # Out of time range.
+          value_template: "{{ not (time_ranged_delay or time_ranged_delay == 0) }}"
         sequence:
           - condition: template
             value_template: "{{ not is_state(target_entity, time_end_state) }}"
