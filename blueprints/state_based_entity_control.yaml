@@ -224,7 +224,7 @@ variables:
   _alt_trigger_timeouts: !input alt_trigger_timeouts
   _alt_trigger_timeout: >-
       {% set _alt_trigger_timeouts = _alt_trigger_timeouts | replace(' ', '') %}
-      {% set current_time = now().strftime("%H:%M:%S")  %}
+      {% set current_time = now().strftime("%H:%M:%S") %}
       {% for alt in (_alt_trigger_timeouts or '').split(';') if alt %}
         {% set val = alt.split(',') %}
         {% if val | length == 2 and val[0] %}
