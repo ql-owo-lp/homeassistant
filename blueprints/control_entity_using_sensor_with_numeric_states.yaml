@@ -156,7 +156,7 @@ action:
                 entity_id: "{{ target_entity }}"
       - conditions:
           - condition: template
-            value_template: "{{ states(sensor_entity) <= lower_bound }}"
+            value_template: "{{ states(sensor_entity) < lower_bound }}"
         sequence:
           - condition: template
             value_template: "{{ not is_state(target_entity, target_on_state) }}"
@@ -184,7 +184,7 @@ action:
                 entity_id: "{{ target_entity }}"
       - conditions:
           - condition: template
-            value_template: "{{ states(sensor_entity) >= upper_bound }}"
+            value_template: "{{ states(sensor_entity) > upper_bound }}"
         sequence:
           - condition: template
             value_template: "{{ not is_state(target_entity, target_off_state) }}"
