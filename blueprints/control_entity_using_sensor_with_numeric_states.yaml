@@ -122,16 +122,10 @@ variables:
   upper_bound: !input "upper_bound"
 
 trigger:
-#   - platform: numeric_state
-#     entity_id: !input "sensor_entity"
-#     below: !input "lower_bound"
-#   - platform: numeric_state
-#     entity_id: !input "sensor_entity"
-#     above: !input "upper_bound"
   - platform: state
     entity_id: !input "sensor_entity"
-#   - platform: time_pattern
-#    minutes: !input "time_range_check_interval"
+  - platform: state
+    entity_id: !input "target_entity"
   - platform: event
     event_type: automation_reloaded
   - platform: homeassistant
