@@ -49,15 +49,6 @@ blueprint:
       selector:
         entity:
           domain: input_text
-    time_range_check_interval:
-      name: Time Range Check Interval
-      description: >-
-        Interval (in minutes) to check if the target entity should be turned off due to out of defined time ranges.
-        '/5' means every five minutes.
-      default: '/5'
-      selector:
-        entity:
-          domain: input_number
     target_on_state:
       name: Target On State
       description: >-
