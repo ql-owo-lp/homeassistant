@@ -190,6 +190,22 @@ blueprint:
       selector:
         entity:
           domain: input_text
+    execution_time_ranges:
+      name: (OPTIONAL) Execution Time Ranges
+      description: >-
+        Time ranges when this automation will be executed. If specified, this automation
+        will only execute when current time is within any given time range.
+        Follow format 
+        "time_start_1-time_end_1;time_start_2-time_end_2;more times.."
+        Use "HH:MM:SS" for "time_start" and "time_end".
+        Time ranges must not overlap.
+        e.g.
+        "17:00:00-19:00:00;19:30:00-20:00:00" means this automation will be enabled
+        from 17:00:00 to 19:00:00 and from 19:30:00 to 20:00:00 everyday.
+      default:
+      selector:
+        entity:
+          domain: input_text
 
 mode: restart
 
@@ -249,6 +265,21 @@ variables:
       {% else %}
         {{ 30 }}
       {% endif %}
+  execution_time_ranges: !input execution_time_ranges
+  executionable: >-
+      {% set execution_time_ranges = execution_time_ranges | replace(' ', '') %}
+      {% set current_time = now().strftime("%H:%M:%S") %}
+      {% for val in (execution_time_ranges or '').split(';') if val %}
+        {% set t = val.split('-') %}
+        {% if t | length == 2 %}
+          {% if t[0] == t[1] or
+                (t[0] < t[1] and t[0] <= current_time and current_time <= t[1]) or
+                (t[0] > t[1] and (current_time >= t[0] or current_time <= t[1]))
+          %}
+            {{ true }}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
   sun_elevation_below: !input sun_elevation_below
   
 trigger:
@@ -276,6 +307,15 @@ condition:
 
 action:
   - choose:
+      - conditions:
+          - contition: template
+            # When execution_time_ranges is defined, but right now it's outside of execution time range.
+            value_template: "{{ execution_time_ranges and not executionable }}"
+        sequence:
+          - service: system_log.write
+            data:
+              message: "Skip executing service on {{ state_attr(target_entity, 'friendly_name') }} since it's outside of execution time range."
+              level: info
       - conditions:
           - condition: template
             # This prevent the rule from turning on target entity that is turned off manually from UI/App or from physical switch, even though the trigger entity's state is not cleared.
