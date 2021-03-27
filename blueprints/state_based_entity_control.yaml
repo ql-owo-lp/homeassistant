@@ -266,7 +266,7 @@ variables:
         {{ 30 }}
       {% endif %}
   execution_time_ranges: !input execution_time_ranges
-  executionable: >-
+  execution_time_range_matched: >-
       {% set execution_time_ranges = execution_time_ranges | replace(' ', '') %}
       {% set current_time = now().strftime("%H:%M:%S") %}
       {% for val in (execution_time_ranges or '').split(';') if val %}
@@ -276,10 +276,16 @@ variables:
                 (t[0] < t[1] and t[0] <= current_time and current_time <= t[1]) or
                 (t[0] > t[1] and (current_time >= t[0] or current_time <= t[1]))
           %}
-            {{ true }}
+            {{ val }}
           {% endif %}
         {% endif %}
       {% endfor %}
+  executionable: >-
+      {% if execution_time_range_matched %}
+        {{ true }}
+      {% else %}
+        {{ false }}
+      {% endif %}
   sun_elevation_below: !input sun_elevation_below
   
 trigger:
@@ -310,7 +316,7 @@ action:
       - conditions:
           - contition: template
             # When execution_time_ranges is defined, but right now it's outside of execution time range.
-            value_template: "{{ (execution_time_ranges or false) and not (executionable or false) }}"
+            value_template: "{{ execution_time_ranges and not executionable }}"
         sequence:
           - service: system_log.write
             data:
