@@ -280,12 +280,6 @@ variables:
           {% endif %}
         {% endif %}
       {% endfor %}
-  executionable: >-
-      {% if execution_time_range_matched %}
-        {{ true }}
-      {% else %}
-        {{ false }}
-      {% endif %}
   sun_elevation_below: !input sun_elevation_below
   
 trigger:
@@ -314,9 +308,9 @@ condition:
 action:
   - choose:
       - conditions:
-          - contition: template
+          - condition: template
             # When execution_time_ranges is defined, but right now it's outside of execution time range.
-            value_template: "{{ execution_time_ranges and not executionable }}"
+            value_template: "{{ execution_time_ranges and not execution_time_range_matched }}"
         sequence:
           - service: system_log.write
             data:
