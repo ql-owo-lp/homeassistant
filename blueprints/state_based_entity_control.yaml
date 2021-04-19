@@ -231,7 +231,7 @@ variables:
   _trigger_timeout: !input trigger_timeout
   illuminance_sensor: !input illuminance_sensor
   _illuminance_below: !input illuminance_below
-  illuminance_matched: "{{ not illuminance_sensor or states(illuminance_sensor) | int | default(99999, true) <= _illuminance_below | int(-1) }}"
+  illuminance_matched: "{{ illuminance_sensor == null or states(illuminance_sensor) | int | default(99999, true) <= _illuminance_below | int(-1) }}"
   blocker_entity: !input blocker_entity
   _blocker_entity_state: !input blocker_entity_state
   blocker_entity_state: "{{ (_blocker_entity_state or '') | trim }}"
@@ -314,8 +314,9 @@ variables:
         {%- endfor %}
       {% endif %}
   _sun_elevation_below: !input sun_elevation_below
-  sun_elevation_matched: "{{ (_sun_elevation_below or _sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= _sun_elevation_below | int(-91) or false }}"
-  skip_illuminance_and_sun: "{{ not illuminance_sensor and not (_sun_elevation_below and _sun_elevation_below == 0) or false }}"
+  sun_evevation_below: "{{ _sun_elevation_below | default(-91) }}"
+  sun_elevation_matched: "{{ state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below }}"
+  skip_illuminance_and_sun: "{{ illuminance_sensor | default('', true) | trim == '' and _sun_elevation_below | default('', true) | trim == '' }}"
   
 trigger:
   - platform: event
@@ -359,13 +360,13 @@ action:
             value_template: "{{ illuminance_matched or sun_elevation_matched or skip_illuminance_and_sun }}"
           - condition: template
             # When target_entity_state is ignored, or target entity is not "on".
-            value_template: "{{ not target_entity_state or not target_entities_matched }}"
+            value_template: "{{ target_entity_state | default('', true) == '' or target_entities_matched != '' }}"
           - condition: template
             # When trigger entity is "on".
             value_template: "{{ trigger_entities_matched }}"
           - condition: template
             # When it's not blocked by blocker_entity.
-            value_template: "{{ not blocker_entity or not states(blocker_entity) | regex_match('^('+ blocker_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ blocker_entity | default('', true) == '' or not states(blocker_entity) | regex_match('^('+ blocker_entity_state +')$', ignorecase=true) }}"
         sequence:
           - service: logbook.log
             # Add a logbook entry to indicate what triggered this action.
@@ -379,13 +380,13 @@ action:
       - conditions:
           - condition: template
             # When target entity is "on".
-            value_template: "{{ not target_entity_state or target_entities_matched }}"
+            value_template: "{{ target_entity_state | default('', true) == '' or target_entities_matched }}"
           - condition: template
             # When trigger entity is "off".
-            value_template: "{{ (trigger_entity_state_off and trigger_entities_off_matched) or (not trigger_entity_state_off and not trigger_entities_matched) }}"
+            value_template: "{{ (trigger_entity_state_off | default('', true) != '' and trigger_entities_off_matched) or (trigger_entity_state_off | default('', true) == '' and not trigger_entities_matched) }}"
           - condition: template
             # When it's not blocked by timeout_blocker_entity.
-            value_template: "{{ not timeout_blocker_entity or not states(timeout_blocker_entity) | regex_match('^('+ timeout_blocker_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ timeout_blocker_entity | default('', true) == '' or not states(timeout_blocker_entity) | regex_match('^('+ timeout_blocker_entity_state +')$', ignorecase=true) }}"
         sequence:
           # We don't need to do a "wait for trigger" action.
           # As we listen to any state change of the motion_sensor/target_entity,
