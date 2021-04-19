@@ -314,7 +314,7 @@ variables:
         {%- endfor %}
       {% endif %}
   _sun_elevation_below: !input sun_elevation_below
-  sun_elevation_matched: "{{ (sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= _sun_elevation_below | int(-91) or false }}"
+  sun_elevation_matched: "{{ (_sun_elevation_below or _sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= _sun_elevation_below | int(-91) or false }}"
   skip_illuminance_and_sun: "{{ not illuminance_sensor and not (sun_elevation_below and sun_elevation_below == 0) or false }}"
   
 trigger:
