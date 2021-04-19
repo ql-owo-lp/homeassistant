@@ -280,6 +280,37 @@ variables:
           {% endif %}
         {% endif %}
       {% endfor %}
+  # At least one trigger entity should be available.
+  trigger_entities_available: >-
+      {% for e in (trigger_entity or '').split(',') if e -%}
+        {% if states(e) != 'unknown' and not is_state(e, 'unavailable') -%}
+          +
+        {%- endif %}
+      {%- endfor %}
+  trigger_entities_matched: >-
+      {% if trigger_entity_state %}
+        {% for e in (trigger_entity or '').split(',') if e -%}
+          {% if states(e) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) -%}
+            +
+          {%- endif %}
+        {%- endfor %}
+      {% endif %}
+  trigger_entities_off_matched: >-
+      {% if trigger_entity_state_off %}
+        {% for e in (trigger_entity or '').split(',') if e -%}
+          {% if states(e) | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true) -%}
+            +
+          {%- endif %}
+        {%- endfor %}
+      {% endif %}
+  target_entities_matched: >-
+      {% if target_entity_state %}
+        {% for e in (target_entity or '').split(',') if e -%}
+          {% if states(e) | regex_match('^('+ target_entity_state +')$', ignorecase=true) -%}
+            +
+          {%- endif %}
+        {%- endfor %}
+      {% endif %}
   sun_elevation_below: !input sun_elevation_below
   
 trigger:
@@ -303,7 +334,7 @@ condition:
   - condition: template
     # Trigger entity (sensor) must be active. If it's not connected due to dead battery or connectivity issue, we shouldn't execute this automation.
     # Thus the target can still be operated manually.
-    value_template: "{{ states(trigger_entity) != 'unknown' and not is_state(trigger_entity, 'unavailable') }}"
+    value_template: "{{ trigger_entities_available }}"
 
 action:
   - choose:
@@ -324,10 +355,10 @@ action:
             value_template: "{{ states(illuminance_sensor or '') | int | default(99999, true) <= illuminance_below | int(-1) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
           - condition: template
             # When target_entity_state is ignored, or target entity is not "on".
-            value_template: "{{ not target_entity_state or not (states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true)) }}"
+            value_template: "{{ not target_entity_state or not target_entities_matched }}"
           - condition: template
             # When trigger entity is "on".
-            value_template: "{{ states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ trigger_entities_matched }}"
           - condition: template
             # When it's not blocked by blocker_entity.
             value_template: "{{ not blocker_entity or not states(blocker_entity) | regex_match('^('+ blocker_entity_state +')$', ignorecase=true) }}"
@@ -344,10 +375,10 @@ action:
       - conditions:
           - condition: template
             # When target entity is "on".
-            value_template: "{{ not target_entity_state or states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ not target_entity_state or target_entities_matched }}"
           - condition: template
             # When trigger entity is "off".
-            value_template: "{{ (trigger_entity_state_off and states(trigger_entity) | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true)) or (not trigger_entity_state_off and not states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true)) }}"
+            value_template: "{{ (trigger_entity_state_off and trigger_entities_off_matched) or (not trigger_entity_state_off and not trigger_entities_matched) }}"
           - condition: template
             # When it's not blocked by timeout_blocker_entity.
             value_template: "{{ not timeout_blocker_entity or not states(timeout_blocker_entity) | regex_match('^('+ timeout_blocker_entity_state +')$', ignorecase=true) }}"
