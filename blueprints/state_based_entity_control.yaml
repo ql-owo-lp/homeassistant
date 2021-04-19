@@ -216,7 +216,7 @@ variables:
   _target_entity_state: !input target_entity_state
   target_entity_state: >-
       {% set st = _target_entity_state or '' | trim %}
-      {% if st != 'none' and not target_entity | regex_match('^(scene|script)\..+', ignorecase=true) %}
+      {% if st != 'none' and target_entity != null and not target_entity | regex_match('^(scene|script)\..+', ignorecase=true) %}
         {{ st }}
       {% endif %}
   _target_entity_action_on: !input target_entity_action_on
@@ -292,7 +292,7 @@ variables:
   trigger_entities_matched: >-
       {% if trigger_entity_state %}
         {% for e in (trigger_entity or '').split(',') if e -%}
-          {% if states(e) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) -%}
+          {% if (states(e) or '') | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) -%}
             {{ e }}:{{ states(e) }};
           {%- endif %}
         {%- endfor %}
@@ -300,7 +300,7 @@ variables:
   trigger_entities_off_matched: >-
       {% if trigger_entity_state_off %}
         {% for e in (trigger_entity or '').split(',') if e -%}
-          {% if states(e) | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true) -%}
+          {% if (states(e) or '') | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true) -%}
             {{ e }}:{{ states(e) }};
           {%- endif %}
         {%- endfor %}
@@ -308,7 +308,7 @@ variables:
   target_entities_matched: >-
       {% if target_entity_state %}
         {% for e in (target_entity or '').split(',') if e -%}
-          {% if states(e) | regex_match('^('+ target_entity_state +')$', ignorecase=true) -%}
+          {% if (states(e) or '') | regex_match('^('+ target_entity_state +')$', ignorecase=true) -%}
             {{ e }}:{{ states(e) }};
           {%- endif %}
         {%- endfor %}
@@ -371,7 +371,7 @@ action:
             value_template: "{{ trigger_entities_matched }}"
           - condition: template
             # When it's not blocked by blocker_entity.
-            value_template: "{{ blocker_entity | default('', true) == '' or not states(blocker_entity) | regex_match('^('+ blocker_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ blocker_entity | default('', true) == '' or not (states(blocker_entity) or '') | regex_match('^('+ blocker_entity_state +')$', ignorecase=true) }}"
         sequence:
           - service: logbook.log
             # Add a logbook entry to indicate what triggered this action.
@@ -391,7 +391,7 @@ action:
             value_template: "{{ (trigger_entity_state_off | default('', true) != '' and trigger_entities_off_matched) or (trigger_entity_state_off | default('', true) == '' and not trigger_entities_matched) }}"
           - condition: template
             # When it's not blocked by timeout_blocker_entity.
-            value_template: "{{ timeout_blocker_entity | default('', true) == '' or not states(timeout_blocker_entity) | regex_match('^('+ timeout_blocker_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ timeout_blocker_entity | default('', true) == '' or not (states(timeout_blocker_entity) or '') | regex_match('^('+ timeout_blocker_entity_state +')$', ignorecase=true) }}"
         sequence:
           # We don't need to do a "wait for trigger" action.
           # As we listen to any state change of the motion_sensor/target_entity,
