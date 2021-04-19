@@ -336,7 +336,7 @@ condition:
   - condition: template
     # Trigger entity (sensor) must be active. If it's not connected due to dead battery or connectivity issue, we shouldn't execute this automation.
     # Thus the target can still be operated manually.
-    value_template: "{{ trigger_entities_available }}"
+    value_template: "{{ trigger_entities_available | length }}"
 
 action:
   - choose:
