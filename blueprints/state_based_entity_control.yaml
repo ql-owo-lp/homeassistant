@@ -216,7 +216,7 @@ variables:
   _target_entity_state: !input target_entity_state
   target_entity_state: >-
       {% set st = _target_entity_state or '' | trim %}
-      {% if st != 'none' and not target_entity | regex_match('^(scene|script)\..+', ignorecase=true) %}
+      {% if st != 'none' and not (target_entity or '') | regex_match('^(scene|script)\..+', ignorecase=true) %}
         {{ st }}
       {% endif %}
   _target_entity_action_on: !input target_entity_action_on
@@ -230,7 +230,8 @@ variables:
   trigger_entity_state_off: "{{ _trigger_entity_state_off | default('', true) | trim }}"
   _trigger_timeout: !input trigger_timeout
   illuminance_sensor: !input illuminance_sensor
-  illuminance_below: !input illuminance_below
+  _illuminance_below: !input illuminance_below
+  illuminance_matched: "{{ illuminance_sensor == null or states(illuminance_sensor) | int | default(99999, true) <= _illuminance_below | int(-1) }}"
   blocker_entity: !input blocker_entity
   _blocker_entity_state: !input blocker_entity_state
   blocker_entity_state: "{{ (_blocker_entity_state or '') | trim }}"
@@ -280,7 +281,47 @@ variables:
           {% endif %}
         {% endif %}
       {% endfor %}
-  sun_elevation_below: !input sun_elevation_below
+  # At least one trigger entity should be available.
+  _trigger_entities_available: >-
+      {% for e in (trigger_entity or '').split(',') if e -%}
+        {% if states(e) != 'unknown' and not is_state(e, 'unavailable') -%}
+          {{ 1 }}
+        {%- endif %}
+      {%- endfor %}
+  trigger_entities_available: "{{ (_trigger_entities_available or 0) > 0 }}"
+  trigger_entities_matched: >-
+      {% if trigger_entity_state %}
+        {% for e in (trigger_entity or '').split(',') if e -%}
+          {% if (states(e) or '') | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) -%}
+            {{ e }}:{{ states(e) }};
+          {%- endif %}
+        {%- endfor %}
+      {% endif %}
+  trigger_entities_off_matched: >-
+      {% if trigger_entity_state_off %}
+        {% for e in (trigger_entity or '').split(',') if e -%}
+          {% if (states(e) or '') | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true) -%}
+            {{ e }}:{{ states(e) }};
+          {%- endif %}
+        {%- endfor %}
+      {% endif %}
+  target_entities_matched: >-
+      {% if target_entity_state %}
+        {% for e in (target_entity or '').split(',') if e -%}
+          {% if (states(e) or '') | regex_match('^('+ target_entity_state +')$', ignorecase=true) -%}
+            {{ e }}:{{ states(e) }};
+          {%- endif %}
+        {%- endfor %}
+      {% endif %}
+  _sun_elevation_below: !input sun_elevation_below
+  sun_elevation_below: >-
+      {% if _sun_elevation_below == 0 %}
+        {{ 0 }}
+      {% else %}
+        {{ _sun_elevation_below | int(-91) }}
+      {% endif %}
+  sun_elevation_matched: "{{ state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below }}"
+  skip_illuminance_and_sun: "{{ illuminance_sensor | default('', true) | trim == '' and _sun_elevation_below | default('', true) | trim == '' }}"
   
 trigger:
   - platform: event
@@ -303,7 +344,7 @@ condition:
   - condition: template
     # Trigger entity (sensor) must be active. If it's not connected due to dead battery or connectivity issue, we shouldn't execute this automation.
     # Thus the target can still be operated manually.
-    value_template: "{{ states(trigger_entity) != 'unknown' and not is_state(trigger_entity, 'unavailable') }}"
+    value_template: "{{ trigger_entities_available }}"
 
 action:
   - choose:
@@ -321,16 +362,16 @@ action:
             # This prevent the rule from turning on target entity that is turned off manually from UI/App or from physical switch, even though the trigger entity's state is not cleared.
             value_template: "{{ not trigger or (trigger.platform == 'state' and trigger.entity_id != target_entity) }}"
           - condition: template
-            value_template: "{{ states(illuminance_sensor or '') | int | default(99999, true) <= illuminance_below | int(-1) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
+            value_template: "{{ illuminance_matched or sun_elevation_matched or skip_illuminance_and_sun }}"
           - condition: template
             # When target_entity_state is ignored, or target entity is not "on".
-            value_template: "{{ not target_entity_state or not (states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true)) }}"
+            value_template: "{{ target_entity_state | default('', true) == '' or target_entities_matched != '' }}"
           - condition: template
             # When trigger entity is "on".
-            value_template: "{{ states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ trigger_entities_matched }}"
           - condition: template
             # When it's not blocked by blocker_entity.
-            value_template: "{{ not blocker_entity or not states(blocker_entity) | regex_match('^('+ blocker_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ blocker_entity | default('', true) == '' or not (states(blocker_entity) or '') | regex_match('^('+ blocker_entity_state +')$', ignorecase=true) }}"
         sequence:
           - service: logbook.log
             # Add a logbook entry to indicate what triggered this action.
@@ -344,13 +385,13 @@ action:
       - conditions:
           - condition: template
             # When target entity is "on".
-            value_template: "{{ not target_entity_state or states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ target_entity_state | default('', true) == '' or target_entities_matched }}"
           - condition: template
             # When trigger entity is "off".
-            value_template: "{{ (trigger_entity_state_off and states(trigger_entity) | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true)) or (not trigger_entity_state_off and not states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true)) }}"
+            value_template: "{{ (trigger_entity_state_off | default('', true) != '' and trigger_entities_off_matched) or (trigger_entity_state_off | default('', true) == '' and not trigger_entities_matched) }}"
           - condition: template
             # When it's not blocked by timeout_blocker_entity.
-            value_template: "{{ not timeout_blocker_entity or not states(timeout_blocker_entity) | regex_match('^('+ timeout_blocker_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ timeout_blocker_entity | default('', true) == '' or not (states(timeout_blocker_entity) or '') | regex_match('^('+ timeout_blocker_entity_state +')$', ignorecase=true) }}"
         sequence:
           # We don't need to do a "wait for trigger" action.
           # As we listen to any state change of the motion_sensor/target_entity,
