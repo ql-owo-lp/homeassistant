@@ -231,6 +231,7 @@ variables:
   _trigger_timeout: !input trigger_timeout
   illuminance_sensor: !input illuminance_sensor
   illuminance_below: !input illuminance_below
+  illuminance_matched: "{{ illuminance_sensor and states(illuminance_sensor) | int | default(99999, true) <= illuminance_below | int(-1) }}"
   blocker_entity: !input blocker_entity
   _blocker_entity_state: !input blocker_entity_state
   blocker_entity_state: "{{ (_blocker_entity_state or '') | trim }}"
@@ -312,6 +313,7 @@ variables:
         {%- endfor %}
       {% endif %}
   sun_elevation_below: !input sun_elevation_below
+  sun_elevation_matched: "{{ (sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91) }}"
   
 trigger:
   - platform: event
@@ -352,7 +354,7 @@ action:
             # This prevent the rule from turning on target entity that is turned off manually from UI/App or from physical switch, even though the trigger entity's state is not cleared.
             value_template: "{{ not trigger or (trigger.platform == 'state' and trigger.entity_id != target_entity) }}"
           - condition: template
-            value_template: "{{ states(illuminance_sensor or '') | int | default(99999, true) <= illuminance_below | int(-1) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
+            value_template: "{{ illuminance_matched or sun_elevation_matched or (not illuminance_sensor and not sun_elevation_below and sun_elevation_below != 0) }}"
           - condition: template
             # When target_entity_state is ignored, or target entity is not "on".
             value_template: "{{ not target_entity_state or not target_entities_matched }}"
