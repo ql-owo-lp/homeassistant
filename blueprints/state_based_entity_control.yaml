@@ -285,14 +285,14 @@ variables:
   trigger_entities_available: >-
       {% for e in (trigger_entity or '').split(',') if e -%}
         {% if states(e) != 'unknown' and not is_state(e, 'unavailable') -%}
-          +
+          {{ 1 }}
         {%- endif %}
       {%- endfor %}
   trigger_entities_matched: >-
       {% if trigger_entity_state %}
         {% for e in (trigger_entity or '').split(',') if e -%}
           {% if states(e) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) -%}
-            +
+            {{ 1 }}
           {%- endif %}
         {%- endfor %}
       {% endif %}
@@ -300,7 +300,7 @@ variables:
       {% if trigger_entity_state_off %}
         {% for e in (trigger_entity or '').split(',') if e -%}
           {% if states(e) | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true) -%}
-            +
+            {{ 1 }}
           {%- endif %}
         {%- endfor %}
       {% endif %}
@@ -308,7 +308,7 @@ variables:
       {% if target_entity_state %}
         {% for e in (target_entity or '').split(',') if e -%}
           {% if states(e) | regex_match('^('+ target_entity_state +')$', ignorecase=true) -%}
-            +
+            {{ 1 }}
           {%- endif %}
         {%- endfor %}
       {% endif %}
@@ -336,7 +336,7 @@ condition:
   - condition: template
     # Trigger entity (sensor) must be active. If it's not connected due to dead battery or connectivity issue, we shouldn't execute this automation.
     # Thus the target can still be operated manually.
-    value_template: "{{ trigger_entities_available | length }}"
+    value_template: "{{ trigger_entities_available }}"
 
 action:
   - choose:
