@@ -231,7 +231,7 @@ variables:
   _trigger_timeout: !input trigger_timeout
   illuminance_sensor: !input illuminance_sensor
   _illuminance_below: !input illuminance_below
-  illuminance_matched: "{{ not illuminance_sensor or states(illuminance_sensor) | int | default(99999, true) <= _illuminance_below | int(-1)) }}"
+  illuminance_matched: "{{ not illuminance_sensor or states(illuminance_sensor) | int | default(99999, true) <= _illuminance_below | int(-1) }}"
   blocker_entity: !input blocker_entity
   _blocker_entity_state: !input blocker_entity_state
   blocker_entity_state: "{{ (_blocker_entity_state or '') | trim }}"
