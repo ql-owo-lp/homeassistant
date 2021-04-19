@@ -314,7 +314,7 @@ variables:
         {%- endfor %}
       {% endif %}
   _sun_elevation_below: !input sun_elevation_below
-  sun_evevation_below: "{{ _sun_elevation_below | default(-91) }}"
+  sun_elevation_below: "{{ _sun_elevation_below | default(-91) }}"
   sun_elevation_matched: "{{ state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below }}"
   skip_illuminance_and_sun: "{{ illuminance_sensor | default('', true) | trim == '' and _sun_elevation_below | default('', true) | trim == '' }}"
   
