@@ -281,13 +281,12 @@ variables:
         {% endif %}
       {% endfor %}
   # At least one trigger entity should be available.
-  _trigger_entities_available: >-
+  trigger_entities_available: >-
       {% for e in (trigger_entity or '').split(',') if e -%}
         {% if states(e) != 'unknown' and not is_state(e, 'unavailable') -%}
           {{ e }}:{{ states(e) }};
         {%- endif %}
       {%- endfor %}
-  trigger_entities_available: "{{ (_trigger_entities_available or 0) > 0 }}"
   trigger_entities_matched: >-
       {% if trigger_entity_state %}
         {% for e in (trigger_entity or '').split(',') if e -%}
