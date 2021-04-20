@@ -210,7 +210,8 @@ blueprint:
 mode: restart
 
 variables:
-  target_entity: !input target_entity
+  _target_entity: !input target_entity
+  target_entity: "{{ _target_entity or '' }}"
   _target_entity_off: !input target_entity_off
   target_entity_off: "{{ _target_entity_off | default(target_entity, true) | trim }}"
   _target_entity_state: !input target_entity_state
@@ -223,7 +224,8 @@ variables:
   target_entity_action_on: "{{ _target_entity_action_on | default('homeassistant.turn_on', true) | trim }}"
   _target_entity_action_off: !input target_entity_action_off
   target_entity_action_off: "{{ _target_entity_action_off | default('homeassistant.turn_off', true) | trim }}"
-  trigger_entity: !input trigger_entity
+  _trigger_entity: !input trigger_entity
+  trigger_entity: "{{ _trigger_entity or '' }}"
   _trigger_entity_state: !input trigger_entity_state
   trigger_entity_state: "{{ _trigger_entity_state | default('on', true) | trim }}"
   _trigger_entity_state_off: !input trigger_entity_state_off
@@ -265,31 +267,31 @@ variables:
       {% else %}
         {{ 30 }}
       {% endif %}
-  execution_time_ranges: !input execution_time_ranges
+  _execution_time_ranges: !input execution_time_ranges
+  execution_time_ranges: "{{ (_execution_time_ranges or '') | replace(' ', '') }}"
   execution_time_range_matched: >-
-      {% set execution_time_ranges = execution_time_ranges | replace(' ', '') %}
       {% set current_time = now().strftime("%H:%M:%S") %}
-      {% for val in (execution_time_ranges or '').split(';') if val %}
+      {% for val in (execution_time_ranges or '').split(';') if val -%}
         {% set t = val.split('-') %}
-        {% if t | length == 2 %}
+        {% if t | length == 2 -%}
           {% if t[0] == t[1] or
                 (t[0] < t[1] and t[0] <= current_time and current_time <= t[1]) or
                 (t[0] > t[1] and (current_time >= t[0] or current_time <= t[1]))
-          %}
+          -%}
             {{ val }}
-          {% endif %}
-        {% endif %}
-      {% endfor %}
+          {%- endif %}
+        {%- endif %}
+      {%- endfor %}
   # At least one trigger entity should be available.
   trigger_entities_available: >-
-      {% for e in (trigger_entity or '').split(',') if e -%}
+      {% for e in trigger_entity.split(',') if e -%}
         {% if states(e) != 'unknown' and not is_state(e, 'unavailable') -%}
           {{ e }}:{{ states(e) }};
         {%- endif %}
       {%- endfor %}
   trigger_entities_matched: >-
       {% if trigger_entity_state %}
-        {% for e in (trigger_entity or '').split(',') if e -%}
+        {% for e in trigger_entity.split(',') if e -%}
           {% if (states(e) or '') | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) -%}
             {{ e }}:{{ states(e) }};
           {%- endif %}
@@ -297,7 +299,7 @@ variables:
       {% endif %}
   trigger_entities_off_matched: >-
       {% if trigger_entity_state_off %}
-        {% for e in (trigger_entity or '').split(',') if e -%}
+        {% for e in trigger_entity.split(',') if e -%}
           {% if (states(e) or '') | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true) -%}
             {{ e }}:{{ states(e) }};
           {%- endif %}
@@ -305,9 +307,17 @@ variables:
       {% endif %}
   target_entities_matched: >-
       {% if target_entity_state %}
-        {% for e in (target_entity or '').split(',') if e -%}
+        {% for e in target_entity.split(',') if e -%}
           {% if (states(e) or '') | regex_match('^('+ target_entity_state +')$', ignorecase=true) -%}
             {{ e }}:{{ states(e) }};
+          {%- endif %}
+        {%- endfor %}
+      {% endif %}
+  triggered_entity: >-
+      {% if trigger and trigger.platform == 'state' %}
+        {% for e in trigger_entity.split(',') if e -%}
+          {% if e == trigger.entity_id -%}
+            {{ e }}
           {%- endif %}
         {%- endfor %}
       {% endif %}
@@ -334,14 +344,14 @@ condition:
   - condition: template
     # Trigger entity (sensor) must be active. If it's not connected due to dead battery or connectivity issue, we shouldn't execute this automation.
     # Thus the target can still be operated manually.
-    value_template: "{{ (trigger_entities_available or '') != '' }}"
+    value_template: "{{ trigger_entities_available != '' }}"
 
 action:
   - choose:
       - conditions:
           - condition: template
             # When execution_time_ranges is defined, but right now it's outside of execution time range.
-            value_template: "{{ execution_time_ranges and not execution_time_range_matched }}"
+            value_template: "{{ execution_time_ranges != '' and execution_time_range_matched == '' }}"
         sequence:
           - service: system_log.write
             data:
@@ -350,15 +360,15 @@ action:
       - conditions:
           - condition: template
             # This prevent the rule from turning on target entity that is turned off manually from UI/App or from physical switch, even though the trigger entity's state is not cleared.
-            value_template: "{{ not trigger or (trigger.platform == 'state' and trigger.entity_id != target_entity) }}"
+            value_template: "{{ not trigger or triggered_entity != '' }}"
           - condition: template
             value_template: "{{ (sun_elevation_below | int(-9999) == -9999 and not illuminance_sensor) or (illuminance_sensor and states(illuminance_sensor) | int | default(99999, true) <= illuminance_below | int(-1)) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
           - condition: template
-            # When target_entity_state is ignored, or target entity is not "on".
-            value_template: "{{ not target_entity_state or not (states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true)) }}"
+            # When target_entity_state is not set, or target entity is not "on".
+            value_template: "{{ target_entity_state == '' or target_entities_matched == '' }}"
           - condition: template
             # When trigger entity is "on".
-            value_template: "{{ states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ trigger_entities_matched != '' }}"
           - condition: template
             # When it's not blocked by blocker_entity.
             value_template: "{{ not blocker_entity or not states(blocker_entity) | regex_match('^('+ blocker_entity_state +')$', ignorecase=true) }}"
@@ -375,10 +385,10 @@ action:
       - conditions:
           - condition: template
             # When target entity is "on".
-            value_template: "{{ not target_entity_state or states(target_entity) | regex_match('^('+ target_entity_state +')$', ignorecase=true) }}"
+            value_template: "{{ target_entity_state == '' or target_entities_matched != '' }}"
           - condition: template
             # When trigger entity is "off".
-            value_template: "{{ (trigger_entity_state_off and states(trigger_entity) | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true)) or (not trigger_entity_state_off and not states(trigger_entity) | regex_match('^('+ trigger_entity_state +')$', ignorecase=true)) }}"
+            value_template: "{{ (trigger_entity_state_off != '' and trigger_entities_off_matched != '') or (trigger_entity_state_off == '' and trigger_entities_matched == '') }}"
           - condition: template
             # When it's not blocked by timeout_blocker_entity.
             value_template: "{{ not timeout_blocker_entity or not states(timeout_blocker_entity) | regex_match('^('+ timeout_blocker_entity_state +')$', ignorecase=true) }}"
