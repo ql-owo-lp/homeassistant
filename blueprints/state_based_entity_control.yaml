@@ -281,7 +281,6 @@ variables:
         {% endif %}
       {% endfor %}
   sun_elevation_below: !input sun_elevation_below
-  test: "{{ (sun_elevation_below | int(-9999) == -9999 and not illuminance_sensor) or (illuminance_sensor and states(illuminance_sensor) | int | default(99999, true) <= illuminance_below | int(-1)) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
   
 trigger:
   - platform: event
