@@ -15,8 +15,8 @@ blueprint:
         try to change the target entity's state to desired state with target 
         entity's turn on action (defined below). 
         If this value is left empty, it will default to "on". 
-        This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
+        This value supports multiple states separated with comma. 
+        You can list multiple values as "state_1,state_2,state_3".
       default: 'on'
       selector:
         entity:
@@ -29,8 +29,8 @@ blueprint:
         entity's turn off action (defined below). 
         If this value is left empty, then any states that is not "Trigger Entity States"
         defined above will trigger the turn off action. 
-        This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
+        This value supports multiple states separated with comma. 
+        You can list multiple values as "state_1,state_2,state_3".
       default:
       selector:
         entity:
@@ -49,8 +49,8 @@ blueprint:
         will be triggered only based on trigger entity's state,
         which means target entity won't be turned off if it's
         manually turned on.
-        This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
+        This value supports multiple states separated with comma. 
+        You can list multiple values as "state_1,state_2,state_3".
       default: 'on'
       selector:
         entity:
@@ -101,8 +101,8 @@ blueprint:
         it will prevent the automation from 
         "turning on" the target entity using 
         action defined above.
-        This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
+        This value supports multiple states separated with comma. 
+        You can list multiple values as "state_1,state_2,state_3".
       default:
       selector:
         entity:
@@ -122,8 +122,8 @@ blueprint:
         If timeout blocking entity's state is of this state, it will 
         prevent the automation from from "turnning off" the target 
         entity using action defined above.
-        This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
+        This value supports multiple states separated with comma. 
+        You can list multiple values as "state_1,state_2,state_3".
       default:
       selector:
         entity:
@@ -336,6 +336,7 @@ trigger:
   - platform: state
     # Trigger on any state change of the target, including manually turned on the target from switch/hass app.
     entity_id: !input target_entity
+    to: !input target_entity_state
     # Prevent this automation from triggerring if the light was on and off immediately.
     for:
       seconds: 3
