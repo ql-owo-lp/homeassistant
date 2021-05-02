@@ -376,7 +376,7 @@ action:
           - service: logbook.log
             # Add a logbook entry to indicate what triggered this action.
             data_template:
-              name: "{{ state_attr(target_entity, 'friendly_name') }}"
+              name: "{{ state_attr(target_entity, 'friendly_name') or target_entity }}"
               message: "is executing service {{ target_entity_action_on }}"
           - service_template: "{{ target_entity_action_on }}"
             data_template:
@@ -399,7 +399,7 @@ action:
           - service: logbook.log
             # Add a logbook entry to indicate what triggered this action.
             data_template:
-              name: "{{ state_attr(target_entity_off, 'friendly_name') }}"
+              name: "{{ state_attr(target_entity_off, 'friendly_name') or target_entity_off }}"
               message: >-
                   will execute service {{ target_entity_action_off }} after {{ trigger_timeout }}
                   {% set num_timeout = trigger_timeout | int(-1) %}
@@ -415,7 +415,7 @@ action:
           - service: logbook.log
             # Add a logbook entry to indicate what triggered this action.
             data_template:
-              name: "{{ state_attr(target_entity_off, 'friendly_name') }}"
+              name: "{{ state_attr(target_entity_off, 'friendly_name') or target_entity_off }}"
               message: "is executing service {{ target_entity_action_off }}"
               entity_id: "{{ target_entity_off }}"
           - service_template: "{{ target_entity_action_off }}"
