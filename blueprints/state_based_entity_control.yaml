@@ -146,7 +146,26 @@ blueprint:
       default:
       selector:
         entity:
-          domain: input_number
+          domain: input_number          
+    illuminance_always_time_range:
+      name: (Optional) When to Always Respect Illuminance Sensor
+      description: >-
+        By default, the state of illuminance sensor will be ignored after 
+        the initial trigger of the "trigger entity". This is for avoiding 
+        the situation that when a illuminance sensor is placed in the
+        same room of the light, after the light is initially turned on due 
+        to the illuminance sensor returns a value below the threshold, the 
+        illuminance sensor will then again immediately return a value above 
+        the threshold telling this automation that it's bright enough, no
+        need to keep the light on. Then a dead loop of "light on" -> "light off"
+        -> "light on" will start.
+        However, in some situation, people want to respect the state returned
+        by illuminance sensor because the physical environment has changed (e.g.
+        they opened the blind).
+      default:
+      selector:
+        entity:
+          domain: input_text
     sun_elevation_below:
       name: (Optional) Sun Elevation Below
       description: >-
@@ -159,7 +178,7 @@ blueprint:
         entity:
           domain: input_number
     trigger_timeout:
-      name: (Optional) Trigger Timeout.
+      name: (Optional) Trigger Timeout
       description: >-
         After "trigger entity" is no longer at "trigger entity state" for 
         this time (in seconds), "turn off" the target entity.
