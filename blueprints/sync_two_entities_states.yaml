@@ -45,7 +45,8 @@ blueprint:
       selector:
         entity:
           domain: input_text
-mode: restart
+mode: queued
+max: 5
 variables:
   main_entity: !input "main_entity"
   secondary_entity: !input "secondary_entity"
