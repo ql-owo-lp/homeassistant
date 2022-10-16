@@ -362,7 +362,7 @@ action:
             # This prevent the rule from turning on target entity that is turned off manually from UI/App or from physical switch, even though the trigger entity's state is not cleared.
             value_template: "{{ not trigger or triggered_entity != '' }}"
           - condition: template
-            value_template: "{{ (sun_elevation_below | int(-9999) == -9999 and not illuminance_sensor) or (illuminance_sensor and states(illuminance_sensor) | int | default(99999, true) <= illuminance_below | int(-1)) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
+            value_template: "{{ (sun_elevation_below | int(-9999) == -9999 and not illuminance_sensor) or (illuminance_sensor and states(illuminance_sensor) | int(99999) <= illuminance_below | int(-1)) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
           - condition: template
             # When target_entity_state is not set, or target entity is not "on".
             value_template: "{{ target_entity_state == '' or target_entities_matched == '' }}"
