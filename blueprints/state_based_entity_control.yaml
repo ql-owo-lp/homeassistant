@@ -134,7 +134,6 @@ blueprint:
         entity:
           multiple: true
           domain: sensor
-          device_class: illuminance
     illuminance_below:
       name: (Optional) Illuminance Below
       description: >-
@@ -145,6 +144,8 @@ blueprint:
       default:
       selector:
         number:
+          min: 0
+          max: 1000
     sun_elevation_below:
       name: (Optional) Sun Elevation Below
       description: >-
