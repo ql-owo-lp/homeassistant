@@ -8,19 +8,19 @@ blueprint:
       description: This entity will trigger the automation.
       selector:
         entity:
+          multiple: true
     trigger_entity_state:
       name: (Optional) Trigger Entity States
       description: >-
         When the trigger entity state is of this value, this automation will 
         try to change the target entity's state to desired state with target 
         entity's turn on action (defined below). 
-        If this value is left empty, it will default to "on". 
+        If this value is left empty, it will default to `on`. 
         This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
+        i.e. you can list multiple values as `state_1|state_2|state_3`.
       default: 'on'
       selector:
-        entity:
-          domain: input_text
+        text:
     trigger_entity_state_off:
       name: (Optional) Trigger Entity Off States
       description: >-
@@ -30,16 +30,16 @@ blueprint:
         If this value is left empty, then any states that is not "Trigger Entity States"
         defined above will trigger the turn off action. 
         This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
+        i.e. you can list multiple values as `state_1|state_2|state_3`.
       default:
       selector:
-        entity:
-          domain: input_text
+        text:
     target_entity:
       name: Target Entity
       description: Any entity that can be operated with below target entity turn on/off action.
       selector:
         entity:
+          multiple: true
     target_entity_state:
       name: (Optional) Target Entity Desired State
       description: >-
@@ -50,31 +50,28 @@ blueprint:
         which means target entity won't be turned off if it's
         manually turned on.
         This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
+        i.e. you can list multiple values as `state_1|state_2|state_3`.
       default: 'on'
       selector:
-        entity:
-          domain: input_text
+        text:
     target_entity_action_on:
       name: (Optional) Target Entity Turn On Action
       description: >-
         Action that will change target entity's state to desired state.
-        If this value is left empty, it will default to "homeassistant.turn_on".
+        If this value is left empty, it will default to `homeassistant.turn_on`.
       default: 'homeassistant.turn_on'
       selector:
-        entity:
-          domain: input_text
+        text:
     target_entity_action_off:
       name: (Optional) Target Entity Turn Off Action
       description: >-
         Action that will change target entity's state away from desired state. 
         It doesn't necessary have to set the entity's state to 'off', 
         as long as it's not the desired state it will be fine.
-        If this value is left empty, it will default to "homeassistant.turn_off".
+        If this value is left empty, it will default to `homeassistant.turn_off`.
       default: 'homeassistant.turn_off'
       selector:
-        entity:
-          domain: input_text
+        text:
     target_entity_off:
       name: (Optional) Turn Off Target Entity
       description: >-
@@ -85,6 +82,7 @@ blueprint:
       default:
       selector:
         entity:
+          multiple: true
     blocker_entity:
       name: (OPTIONAL) Blocking Entity
       description: >-
@@ -94,6 +92,7 @@ blueprint:
       default:
       selector:
         entity:
+          multiple: true
     blocker_entity_state:
       name: (OPTIONAL) Blocking Entity State
       description: >-
@@ -102,11 +101,10 @@ blueprint:
         "turning on" the target entity using 
         action defined above.
         This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
+        i.e. you can list multiple values as `state_1|state_2|state_3`.
       default:
       selector:
-        entity:
-          domain: input_text
+        text:
     timeout_blocker_entity:
       name: (OPTIONAL) Timeout Blocking Entity
       description: >-
@@ -116,6 +114,7 @@ blueprint:
       default:
       selector:
         entity:
+          multiple: true
     timeout_blocker_entity_state:
       name: (OPTIONAL) Timeout Blocking Entity State
       description: >-
@@ -123,17 +122,17 @@ blueprint:
         prevent the automation from from "turnning off" the target 
         entity using action defined above.
         This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
+        i.e. you can list multiple values as `state_1|state_2|state_3`.
       default:
       selector:
-        entity:
-          domain: input_text
+        text:
     illuminance_sensor:
       name: (Optional) Illuminance Sensor
       description: This sensor will be used to determine the illumination.
       default:
       selector:
         entity:
+          multiple: true
           domain: sensor
           device_class: illuminance
     illuminance_below:
@@ -145,8 +144,7 @@ blueprint:
         If left empty, illuminace sensor will not be applied.
       default:
       selector:
-        entity:
-          domain: input_number
+        number:
     sun_elevation_below:
       name: (Optional) Sun Elevation Below
       description: >-
@@ -156,8 +154,9 @@ blueprint:
         If left empty, this option will not be applied.
       default:
       selector:
-        entity:
-          domain: input_number
+        number:
+          min: -90
+          max: 90
     trigger_timeout:
       name: (Optional) Trigger Timeout.
       description: >-
@@ -168,8 +167,7 @@ blueprint:
         If left empty, by default this will be 30 seconds.
       default: '30'
       selector:
-        entity:
-          domain: input_text
+        text:
     alt_trigger_timeouts:
       name: (OPTIONAL) Alternate Trigger Timeout
       description: >-
@@ -188,8 +186,7 @@ blueprint:
         from 23:00:00 to 1:00:00, use 60 seconds as timeout.
       default:
       selector:
-        entity:
-          domain: input_text
+        text:
     execution_time_ranges:
       name: (OPTIONAL) Execution Time Ranges
       description: >-
@@ -204,8 +201,7 @@ blueprint:
         from 17:00:00 to 19:00:00 and from 19:30:00 to 20:00:00 everyday.
       default:
       selector:
-        entity:
-          domain: input_text
+        text:
 
 mode: restart
 
