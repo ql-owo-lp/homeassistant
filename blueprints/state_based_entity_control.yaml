@@ -158,17 +158,18 @@ blueprint:
         number:
           min: -90
           max: 90
+          unit_of_measurement: '°'
     trigger_timeout:
       name: (Optional) Trigger Timeout.
       description: >-
         After "trigger entity" is no longer at "trigger entity state" for 
-        this time (in seconds), "turn off" the target entity.
-        You can also put the time as "HH:MM:SS". i.e. "01:02:03" means 
-        one hour two mintues three seconds.
+        this time, "turn off" the target entity.
         If left empty, by default this will be 30 seconds.
-      default: '30'
+      default:
+        seconds: 30
       selector:
-        text:
+        enable_day: true
+        duration:
     alt_trigger_timeouts:
       name: (OPTIONAL) Alternate Trigger Timeout
       description: >-
@@ -207,8 +208,7 @@ blueprint:
 mode: restart
 
 variables:
-  _target_entity: !input target_entity
-  target_entity: "{{ _target_entity or '' }}"
+  target_entity: !input target_entity
   _target_entity_off: !input target_entity_off
   target_entity_off: "{{ _target_entity_off | default(target_entity, true) | trim }}"
   _target_entity_state: !input target_entity_state
@@ -221,8 +221,7 @@ variables:
   target_entity_action_on: "{{ _target_entity_action_on | default('homeassistant.turn_on', true) | trim }}"
   _target_entity_action_off: !input target_entity_action_off
   target_entity_action_off: "{{ _target_entity_action_off | default('homeassistant.turn_off', true) | trim }}"
-  _trigger_entity: !input trigger_entity
-  trigger_entity: "{{ _trigger_entity or '' }}"
+  trigger_entity: !input trigger_entity
   _trigger_entity_state: !input trigger_entity_state
   trigger_entity_state: "{{ _trigger_entity_state | default('on', true) | trim }}"
   _trigger_entity_state_off: !input trigger_entity_state_off
@@ -256,7 +255,6 @@ variables:
       {% endfor %}
   trigger_timeout: >-
       {% set _alt_trigger_timeout = _alt_trigger_timeout | replace(' ', '') %}
-      {% set _trigger_timeout = _trigger_timeout | replace(' ', '') %}
       {% if _alt_trigger_timeout or _alt_trigger_timeout == 0 %}
         {{ _alt_trigger_timeout }}
       {% elif _trigger_timeout or _trigger_timeout == 0 %}
@@ -281,14 +279,14 @@ variables:
       {%- endfor %}
   # At least one trigger entity should be available.
   trigger_entities_available: >-
-      {% for e in trigger_entity.split(',') if e -%}
+      {% for e in trigger_entity if e -%}
         {% if states(e) != 'unknown' and not is_state(e, 'unavailable') -%}
           {{ e }}:{{ states(e) }};
         {%- endif %}
       {%- endfor %}
   trigger_entities_matched: >-
       {% if trigger_entity_state %}
-        {% for e in trigger_entity.split(',') if e -%}
+        {% for e in trigger_entity if e -%}
           {% if (states(e) or '') | regex_match('^('+ trigger_entity_state +')$', ignorecase=true) -%}
             {{ e }}:{{ states(e) }};
           {%- endif %}
@@ -296,7 +294,7 @@ variables:
       {% endif %}
   trigger_entities_off_matched: >-
       {% if trigger_entity_state_off %}
-        {% for e in trigger_entity.split(',') if e -%}
+        {% for e in trigger_entity if e -%}
           {% if (states(e) or '') | regex_match('^('+ trigger_entity_state_off +')$', ignorecase=true) -%}
             {{ e }}:{{ states(e) }};
           {%- endif %}
@@ -304,7 +302,7 @@ variables:
       {% endif %}
   target_entities_matched: >-
       {% if target_entity_state %}
-        {% for e in target_entity.split(',') if e -%}
+        {% for e in target_entity if e -%}
           {% if (states(e) or '') | regex_match('^('+ target_entity_state +')$', ignorecase=true) -%}
             {{ e }}:{{ states(e) }};
           {%- endif %}
@@ -312,7 +310,7 @@ variables:
       {% endif %}
   triggered_entity: >-
       {% if trigger and trigger.platform == 'state' %}
-        {% for e in trigger_entity.split(',') if e -%}
+        {% for e in trigger_entity if e -%}
           {% if e == trigger.entity_id -%}
             {{ e }}
           {%- endif %}
@@ -357,7 +355,7 @@ action:
       - conditions:
           - condition: template
             # This prevent the rule from turning on target entity that is turned off manually from UI/App or from physical switch, even though the trigger entity's state is not cleared.
-            value_template: "{{ not trigger or triggered_entity != '' }}"
+            value_template: "{{ not trigger or triggered_entity }}"
           - condition: template
             value_template: "{{ (sun_elevation_below | int(-9999) == -9999 and not illuminance_sensor) or (illuminance_sensor and states(illuminance_sensor) | int(99999) <= illuminance_below | int(-1)) or ((sun_elevation_below or sun_elevation_below == 0) and state_attr('sun.sun', 'elevation') | int(91) <= sun_elevation_below | int(-91)) }}"
           - condition: template
