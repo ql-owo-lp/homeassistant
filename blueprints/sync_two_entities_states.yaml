@@ -24,8 +24,7 @@ blueprint:
         current state when main entity's state changes.
       default: false
       selector:
-        entity:
-          domain: input_boolean
+        boolean:
     sync_delay:
       name: Sync Delay
       description: >-
@@ -34,8 +33,7 @@ blueprint:
         this sync will be canceled.
       default: "0"
       selector:
-        entity:
-          domain: input_text
+        duration:
     off_delay:
       name: Off Sync Delay
       description: >-
@@ -43,8 +41,7 @@ blueprint:
         Put number of seconds or 'HH:MM:SS'.
       default: "0"
       selector:
-        entity:
-          domain: input_text
+        duration:
 mode: queued
 max: 5
 variables:
