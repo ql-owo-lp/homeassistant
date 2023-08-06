@@ -141,7 +141,7 @@ blueprint:
         number:
           min: 0
           max: 100000
-          unit_of_measurement: "lx"
+          unit_of_measurement: "lm"
           mode: box
     sun_elevation_below:
       name: (Optional) Sun Elevation Below
@@ -155,7 +155,7 @@ blueprint:
         number:
           min: -90
           max: 90
-          unit_of_measurement: "degree"
+          unit_of_measurement: "°"
     trigger_timeout:
       name: (Optional) Trigger Timeout.
       description: >-
