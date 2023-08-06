@@ -19,8 +19,7 @@ blueprint:
         i.e. you can list multiple values as "state_1|state_2|state_3".
       default: 'on'
       selector:
-        entity:
-          domain: input_text
+        text:
     trigger_entity_state_off:
       name: (Optional) Trigger Entity Off States
       description: >-
@@ -33,8 +32,7 @@ blueprint:
         i.e. you can list multiple values as "state_1|state_2|state_3".
       default:
       selector:
-        entity:
-          domain: input_text
+        text:
     target_entity:
       name: Target Entity
       description: Any entity that can be operated with below target entity turn on/off action.
@@ -53,8 +51,7 @@ blueprint:
         i.e. you can list multiple values as "state_1|state_2|state_3".
       default: 'on'
       selector:
-        entity:
-          domain: input_text
+        text:
     target_entity_action_on:
       name: (Optional) Target Entity Turn On Action
       description: >-
@@ -62,8 +59,7 @@ blueprint:
         If this value is left empty, it will default to "homeassistant.turn_on".
       default: 'homeassistant.turn_on'
       selector:
-        entity:
-          domain: input_text
+        text:
     target_entity_action_off:
       name: (Optional) Target Entity Turn Off Action
       description: >-
@@ -73,8 +69,7 @@ blueprint:
         If this value is left empty, it will default to "homeassistant.turn_off".
       default: 'homeassistant.turn_off'
       selector:
-        entity:
-          domain: input_text
+        text:
     target_entity_off:
       name: (Optional) Turn Off Target Entity
       description: >-
@@ -105,8 +100,7 @@ blueprint:
         i.e. you can list multiple values as "state_1|state_2|state_3".
       default:
       selector:
-        entity:
-          domain: input_text
+        text:
     timeout_blocker_entity:
       name: (OPTIONAL) Timeout Blocking Entity
       description: >-
@@ -126,8 +120,7 @@ blueprint:
         i.e. you can list multiple values as "state_1|state_2|state_3".
       default:
       selector:
-        entity:
-          domain: input_text
+        text:
     illuminance_sensor:
       name: (Optional) Illuminance Sensor
       description: This sensor will be used to determine the illumination.
@@ -145,8 +138,11 @@ blueprint:
         If left empty, illuminace sensor will not be applied.
       default:
       selector:
-        entity:
-          domain: input_number
+        number:
+          min: 0
+          max: 100000
+          unit_of_measurement: "lx"
+          mode: box
     sun_elevation_below:
       name: (Optional) Sun Elevation Below
       description: >-
@@ -156,8 +152,10 @@ blueprint:
         If left empty, this option will not be applied.
       default:
       selector:
-        entity:
-          domain: input_number
+        number:
+          min: -90
+          max: 90
+          unit_of_measurement: "degree"
     trigger_timeout:
       name: (Optional) Trigger Timeout.
       description: >-
@@ -166,10 +164,9 @@ blueprint:
         You can also put the time as "HH:MM:SS". i.e. "01:02:03" means 
         one hour two mintues three seconds.
         If left empty, by default this will be 30 seconds.
-      default: '30'
+      default: "00:00:30"
       selector:
-        entity:
-          domain: input_text
+        duration:
     alt_trigger_timeouts:
       name: (OPTIONAL) Alternate Trigger Timeout
       description: >-
@@ -188,8 +185,7 @@ blueprint:
         from 23:00:00 to 1:00:00, use 60 seconds as timeout.
       default:
       selector:
-        entity:
-          domain: input_text
+        text:
     execution_time_ranges:
       name: (OPTIONAL) Execution Time Ranges
       description: >-
@@ -204,8 +200,7 @@ blueprint:
         from 17:00:00 to 19:00:00 and from 19:30:00 to 20:00:00 everyday.
       default:
       selector:
-        entity:
-          domain: input_text
+        text:
 
 mode: restart
 
