@@ -3,27 +3,15 @@ blueprint:
   description: Change the target entity to desired entity state base on the trigger entity's state, illuminance sensor's state, Sun elevation and so on.
   domain: automation
   input:
-    trigger_entity:
-      name: Trigger Entity
-      description: This entity will trigger the automation.
+    trigger_condition_on:
+      name: Trigger Conditions
+      description: These will trigger the automation.
       selector:
-        entity:
-    trigger_entity_state:
-      name: (Optional) Trigger Entity States
+        condition:
+    trigger_condition_off:
+      name: (Optional) Trigger Condition - Off
       description: >-
-        When the trigger entity state is of this value, this automation will 
-        try to change the target entity's state to desired state with target 
-        entity's turn on action (defined below). 
-        If this value is left empty, it will default to "on". 
-        This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
-      default: 'on'
-      selector:
-        text:
-    trigger_entity_state_off:
-      name: (Optional) Trigger Entity Off States
-      description: >-
-        When the trigger entity state is of this value, this automation will 
+        When these conditions are met,
         try to change the target entity's state to desired state with target 
         entity's turn off action (defined below). 
         If this value is left empty, then any states that is not "Trigger Entity States"
@@ -32,13 +20,13 @@ blueprint:
         i.e. you can list multiple values as "state_1|state_2|state_3".
       default:
       selector:
-        text:
+        condition:
     target_entity:
       name: Target Entity
-      description: Any entity that can be operated with below target entity turn on/off action.
+      description: Any entity that can be operated with below action.
       selector:
         entity:
-    target_entity_state:
+    target_conditions_on:
       name: (Optional) Target Entity Desired State
       description: >-
         When the target entity state is of this value, 
@@ -49,28 +37,10 @@ blueprint:
         manually turned on.
         This value supports regular expression, 
         i.e. you can list multiple values as "state_1|state_2|state_3".
-      default: 'on'
+      default:
       selector:
-        text:
-    target_entity_action_on:
-      name: (Optional) Target Entity Turn On Action
-      description: >-
-        Action that will change target entity's state to desired state.
-        If this value is left empty, it will default to "homeassistant.turn_on".
-      default: 'homeassistant.turn_on'
-      selector:
-        text:
-    target_entity_action_off:
-      name: (Optional) Target Entity Turn Off Action
-      description: >-
-        Action that will change target entity's state away from desired state. 
-        It doesn't necessary have to set the entity's state to 'off', 
-        as long as it's not the desired state it will be fine.
-        If this value is left empty, it will default to "homeassistant.turn_off".
-      default: 'homeassistant.turn_off'
-      selector:
-        text:
-    target_entity_off:
+        condition:
+    target_conditions_off:
       name: (Optional) Turn Off Target Entity
       description: >-
         If set, instead of the original "Target Entity", this entity will be 
@@ -80,45 +50,28 @@ blueprint:
       default:
       selector:
         entity:
-    blocker_entity:
-      name: (OPTIONAL) Blocking Entity
+    target_entity_action_on:
+      name: (Optional) Target Entity Turn On Action
       description: >-
-        If this entity's state is set to blocking entity state (defined below), 
-        it will prevent the automation from "turning on" the target entity 
-        using action defined above.
+        Action that will change target entity's state to desired state.
+        If this value is left empty, it will default to "homeassistant.turn_on".
       default:
+        - service: homeassistant.turn_on
+          target:
+            entity_id: scene.watching_movies
       selector:
-        entity:
-    blocker_entity_state:
-      name: (OPTIONAL) Blocking Entity State
+        action:
+    target_entity_action_off:
+      name: (Optional) Target Entity Turn Off Action
       description: >-
-        If blocking entity's state is of this state, 
-        it will prevent the automation from 
-        "turning on" the target entity using 
-        action defined above.
-        This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
+        Action that will change target entity's state away from desired state. 
+        It doesn't necessary have to set the entity's state to 'off', 
+        as long as it's not the desired state it will be fine.
+        If this value is left empty, it will default to "homeassistant.turn_off".
       default:
-      selector:
-        text:
-    timeout_blocker_entity:
-      name: (OPTIONAL) Timeout Blocking Entity
-      description: >-
-        If this entity's state is set to timeout blocking entity state 
-        (defined below), it will prevent the automation from "turnning off" 
-        the target entity using action defined above.
-      default:
-      selector:
-        entity:
-    timeout_blocker_entity_state:
-      name: (OPTIONAL) Timeout Blocking Entity State
-      description: >-
-        If timeout blocking entity's state is of this state, it will 
-        prevent the automation from from "turnning off" the target 
-        entity using action defined above.
-        This value supports regular expression, 
-        i.e. you can list multiple values as "state_1|state_2|state_3".
-      default:
+        - service: homeassistant.turn_off
+          target:
+            entity_id: scene.watching_movies
       selector:
         text:
     illuminance_sensor:
