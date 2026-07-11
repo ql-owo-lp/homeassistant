@@ -1529,5 +1529,16 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
         )
 
 
+class ValidationScriptTests(unittest.TestCase):
+    def test_validation_script_pins_supported_home_assistant(self):
+        script = (
+            Path(__file__).resolve().parent
+            / "validate_state_based_entity_control.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("home-assistant:2026.7.2", script)
+        self.assertIn("--script check_config", script)
+        self.assertIn("use_blueprint", script)
+
+
 if __name__ == "__main__":
     unittest.main()
