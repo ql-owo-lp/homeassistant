@@ -34,6 +34,7 @@ class BlueprintUiTests(unittest.TestCase):
     def setUpClass(cls):
         with BLUEPRINT.open(encoding="utf-8") as blueprint_file:
             cls.document = yaml.load(blueprint_file, Loader=BlueprintLoader)
+        cls.yaml_text = BLUEPRINT.read_text(encoding="utf-8")
         cls.blueprint = cls.document["blueprint"]
         cls.sections = cls.blueprint["input"]
         cls.inputs = {
@@ -269,6 +270,7 @@ class RuntimeStructureTests(unittest.TestCase):
     def setUpClass(cls):
         with BLUEPRINT.open(encoding="utf-8") as blueprint_file:
             cls.document = yaml.load(blueprint_file, Loader=BlueprintLoader)
+        cls.yaml_text = BLUEPRINT.read_text(encoding="utf-8")
 
     def test_uses_modern_plural_runtime_keys(self):
         self.assertTrue({"triggers", "conditions", "actions"} <= set(self.document))
@@ -456,8 +458,7 @@ class RuntimeStructureTests(unittest.TestCase):
         self.assertIn("available_trigger_entities | count > 0", condition["value_template"])
 
     def test_validation_action_precedes_manual_off_lockout(self):
-        self.assertEqual(2, len(self.document["actions"]))
-        validation, action = self.document["actions"]
+        validation, action = self.document["actions"][:2]
         self.assertEqual("Validate advanced time ranges", validation["alias"])
         self.assertEqual(
             [{
@@ -489,6 +490,73 @@ class RuntimeStructureTests(unittest.TestCase):
                 }
             ],
             action["then"],
+        )
+
+    def test_action_flow_has_traceable_branches(self):
+        for alias in (
+            "Execution window allows this run",
+            "Wait for active manual-off lockout",
+            "Refresh volatile decisions after lockout wait",
+            "Activation conditions match",
+            "Wait before deactivation",
+            "Revalidate after deactivation delay",
+            "Run activation actions",
+            "Run deactivation actions",
+        ):
+            with self.subTest(alias=alias):
+                self.assertIn(f"alias: {alias}", self.yaml_text)
+
+    def test_custom_actions_and_default_fallbacks_are_wired(self):
+        self.assertIn("sequence: !input activation_actions", self.yaml_text)
+        self.assertIn("sequence: !input deactivation_actions", self.yaml_text)
+        self.assertIn("action: homeassistant.turn_on", self.yaml_text)
+        self.assertIn("action: homeassistant.turn_off", self.yaml_text)
+        variables = self.document["variables"]
+        self.assertEqual({"!input": "activation_actions"}, variables["activation_actions"])
+        self.assertEqual({"!input": "deactivation_actions"}, variables["deactivation_actions"])
+        self.assertEqual({"!input": "logbook_enabled"}, variables["logbook_enabled"])
+
+    def test_volatile_decisions_are_refreshed_after_each_delay(self):
+        required = {
+            "execution_allowed",
+            "available_trigger_entities",
+            "activation_entities",
+            "deactivation_entities",
+            "active_target_entities",
+            "manual_off_lockout_remaining_seconds",
+            "manual_off_lockout_active",
+            "activation_blocked",
+            "deactivation_blocked",
+            "illuminance_gate_passed",
+            "sun_gate_passed",
+            "light_gates_passed",
+        }
+        refresh_steps = [
+            action["variables"]
+            for action in self.document["actions"]
+            if action.get("alias", "").startswith("Refresh volatile decisions")
+        ]
+        self.assertEqual(1, len(refresh_steps))
+        self.assertTrue(required <= set(refresh_steps[0]))
+        self.assertIn("alias: Refresh volatile decisions after deactivation delay", self.yaml_text)
+        tail = self.yaml_text.split(
+            "alias: Refresh volatile decisions after deactivation delay", 1
+        )[1]
+        for decision in (
+            "execution_allowed",
+            "available_trigger_entities",
+            "deactivation_entities",
+            "manual_off_lockout_active",
+            "deactivation_blocked",
+            "active_target_entities",
+        ):
+            with self.subTest(decision=decision):
+                self.assertIn(decision, tail)
+
+    def test_logbook_actions_are_guarded_by_ui_toggle(self):
+        self.assertGreaterEqual(self.yaml_text.count("action: logbook.log"), 3)
+        self.assertGreaterEqual(
+            self.yaml_text.count('value_template: "{{ logbook_enabled }}"'), 3
         )
 
     def test_startup_and_reload_sources_run_the_same_lockout_wait(self):

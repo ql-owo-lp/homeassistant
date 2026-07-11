@@ -397,6 +397,9 @@ variables:
   manual_off_enabled: !input manual_off_enabled
   manual_off_duration: !input manual_off_duration
   manual_off_state_pattern: !input manual_off_state_pattern
+  activation_actions: !input activation_actions
+  deactivation_actions: !input deactivation_actions
+  logbook_enabled: !input logbook_enabled
   execution_schedule: !input execution_schedule
   advanced_execution_ranges: !input advanced_execution_ranges
   advanced_alternate_timeouts: !input advanced_alternate_timeouts
@@ -479,7 +482,7 @@ variables:
     {%- endfor -%}
     {{ ns.configured }}
 
-  execution_allowed: >-
+  execution_allowed: &execution_allowed_template >-
     {%- set current = now() -%}
     {%- set current_seconds = current.hour * 3600 + current.minute * 60 + current.second + current.microsecond / 1000000 -%}
     {%- set ns = namespace(allowed=not execution_window_configured) -%}
@@ -517,7 +520,7 @@ variables:
     {%- endif -%}
     {{ ns.allowed }}
 
-  resolved_timeout_seconds: >-
+  resolved_timeout_seconds: &resolved_timeout_seconds_template >-
     {%- set main_seconds =
           (main_timeout.get('days', 0) | float(0) * 86400)
           + (main_timeout.get('hours', 0) | float(0) * 3600)
@@ -577,7 +580,7 @@ variables:
        if configured_off_target_entities | count > 0
        else target_entities }}
 
-  available_trigger_entities: >-
+  available_trigger_entities: &available_trigger_entities_template >-
     {%- set ns = namespace(entities=[]) -%}
     {%- for entity_id in trigger_entities -%}
       {%- if states(entity_id) not in ['unknown', 'unavailable'] -%}
@@ -586,7 +589,7 @@ variables:
     {%- endfor -%}
     {{ ns.entities }}
 
-  activation_entities: >-
+  activation_entities: &activation_entities_template >-
     {%- set ns = namespace(entities=[]) -%}
     {%- for entity_id in available_trigger_entities -%}
       {%- if states(entity_id) is match('^(?:' ~ activation_state_pattern ~ ')\\Z', ignorecase=true) -%}
@@ -595,7 +598,7 @@ variables:
     {%- endfor -%}
     {{ ns.entities }}
 
-  deactivation_entities: >-
+  deactivation_entities: &deactivation_entities_template >-
     {%- set ns = namespace(entities=[]) -%}
     {%- if deactivation_state_pattern | trim != '' -%}
       {%- for entity_id in available_trigger_entities -%}
@@ -608,7 +611,7 @@ variables:
     {%- endif -%}
     {{ ns.entities }}
 
-  active_target_entities: >-
+  active_target_entities: &active_target_entities_template >-
     {%- set ns = namespace(entities=[]) -%}
     {%- for entity_id in target_entities -%}
       {%- if states(entity_id) is match('^(?:' ~ target_state_pattern ~ ')\\Z', ignorecase=true) -%}
@@ -626,7 +629,7 @@ variables:
     {%- endfor -%}
     {{ target_state_tracking and not ns.has_stateless_target }}
 
-  illuminance_gate_passed: >-
+  illuminance_gate_passed: &illuminance_gate_passed_template >-
     {%- if not illuminance_enabled -%}
       {{ true }}
     {%- else -%}
@@ -637,7 +640,7 @@ variables:
          and illuminance_state | float <= illuminance_threshold | float }}
     {%- endif -%}
 
-  sun_gate_passed: >-
+  sun_gate_passed: &sun_gate_passed_template >-
     {%- if not sun_enabled -%}
       {{ true }}
     {%- else -%}
@@ -647,7 +650,7 @@ variables:
          and elevation | float <= sun_elevation_threshold | float }}
     {%- endif -%}
 
-  light_gates_passed: >-
+  light_gates_passed: &light_gates_passed_template >-
     {%- if illuminance_enabled and sun_enabled -%}
       {{ (illuminance_gate_passed or sun_gate_passed)
          if light_gate_mode == 'any'
@@ -660,12 +663,12 @@ variables:
       {{ true }}
     {%- endif -%}
 
-  activation_blocked: >-
+  activation_blocked: &activation_blocked_template >-
     {{ activation_blocker_entity | trim != ''
        and activation_blocker_state_pattern | trim != ''
        and states(activation_blocker_entity) is match('^(?:' ~ activation_blocker_state_pattern ~ ')\\Z', ignorecase=true) }}
 
-  deactivation_blocked: >-
+  deactivation_blocked: &deactivation_blocked_template >-
     {{ deactivation_blocker_entity | trim != ''
        and deactivation_blocker_state_pattern | trim != ''
        and states(deactivation_blocker_entity) is match('^(?:' ~ deactivation_blocker_state_pattern ~ ')\\Z', ignorecase=true) }}
@@ -677,7 +680,7 @@ variables:
        + (manual_off_duration.get('seconds', 0) | float(0))
        + (manual_off_duration.get('milliseconds', 0) | float(0) / 1000) }}
 
-  manual_off_lockout_remaining_seconds: >-
+  manual_off_lockout_remaining_seconds: &manual_off_lockout_remaining_seconds_template >-
     {%- set ns = namespace(remaining=0) -%}
     {%- if manual_off_enabled
           and manual_off_duration_seconds | float > 0
@@ -700,8 +703,11 @@ variables:
     {%- endif -%}
     {{ ns.remaining }}
 
-  manual_off_lockout_active: >-
+  manual_off_lockout_active: &manual_off_lockout_active_template >-
     {{ manual_off_lockout_remaining_seconds | float > 0 }}
+
+  manual_off_lockout_was_active: >-
+    {{ manual_off_lockout_active }}
 
   trigger_source_allows_activation: >-
     {{ trigger is not defined
@@ -751,3 +757,140 @@ actions:
     then:
       - delay:
           seconds: "{{ manual_off_lockout_remaining_seconds }}"
+  - alias: Refresh volatile decisions after lockout wait
+    variables: &refresh_volatile_decisions
+      execution_allowed: *execution_allowed_template
+      available_trigger_entities: *available_trigger_entities_template
+      activation_entities: *activation_entities_template
+      deactivation_entities: *deactivation_entities_template
+      active_target_entities: *active_target_entities_template
+      illuminance_gate_passed: *illuminance_gate_passed_template
+      sun_gate_passed: *sun_gate_passed_template
+      light_gates_passed: *light_gates_passed_template
+      activation_blocked: *activation_blocked_template
+      deactivation_blocked: *deactivation_blocked_template
+      manual_off_lockout_remaining_seconds: *manual_off_lockout_remaining_seconds_template
+      manual_off_lockout_active: *manual_off_lockout_active_template
+      resolved_timeout_seconds: *resolved_timeout_seconds_template
+  - alias: Execution window allows this run
+    condition: template
+    value_template: "{{ execution_allowed }}"
+  - alias: Manual-off lockout is inactive
+    condition: template
+    value_template: "{{ not manual_off_lockout_active }}"
+  - choose:
+      - alias: Activation conditions match
+        conditions:
+          - alias: At least one trigger requests activation
+            condition: template
+            value_template: "{{ activation_entities | count > 0 }}"
+          - alias: The activation source is allowed
+            condition: template
+            value_template: "{{ trigger_source_allows_activation }}"
+          - alias: Enabled light gates pass
+            condition: template
+            value_template: "{{ light_gates_passed }}"
+          - alias: Activation is not blocked
+            condition: template
+            value_template: "{{ not activation_blocked }}"
+          - alias: Target activation is needed
+            condition: template
+            value_template: >-
+              {{ not effective_target_state_tracking
+                 or active_target_entities | count == 0
+                 or manual_off_lockout_was_active }}
+        sequence:
+          - alias: Log activation
+            if:
+              - condition: template
+                value_template: "{{ logbook_enabled }}"
+            then:
+              - action: logbook.log
+                data:
+                  name: "{{ target_entities | join(', ') }}"
+                  message: is running its configured activation action
+                  entity_id: "{{ target_entities | first }}"
+          - alias: Run activation actions
+            choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ activation_actions | count > 0 }}"
+                sequence: !input activation_actions
+            default:
+              - action: homeassistant.turn_on
+                target:
+                  entity_id: !input target_entities
+      - alias: Deactivation conditions match
+        conditions:
+          - alias: At least one trigger requests deactivation
+            condition: template
+            value_template: "{{ deactivation_entities | count > 0 }}"
+          - alias: Deactivation is not blocked
+            condition: template
+            value_template: "{{ not deactivation_blocked }}"
+          - alias: Target deactivation is relevant
+            condition: template
+            value_template: >-
+              {{ not effective_target_state_tracking
+                 or active_target_entities | count > 0 }}
+        sequence:
+          - alias: Log pending deactivation
+            if:
+              - condition: template
+                value_template: "{{ logbook_enabled }}"
+            then:
+              - action: logbook.log
+                data:
+                  name: "{{ off_target_entities | join(', ') }}"
+                  message: >-
+                    will run its configured deactivation action after
+                    {{ resolved_timeout_seconds }} seconds
+                  entity_id: "{{ off_target_entities | first }}"
+          - alias: Wait before deactivation
+            delay:
+              seconds: "{{ resolved_timeout_seconds }}"
+          - alias: Refresh volatile decisions after deactivation delay
+            variables: *refresh_volatile_decisions
+          - alias: Revalidate after deactivation delay
+            condition: and
+            conditions:
+              - alias: Execution window still allows this run
+                condition: template
+                value_template: "{{ execution_allowed }}"
+              - alias: A trigger entity is still available
+                condition: template
+                value_template: "{{ available_trigger_entities | count > 0 }}"
+              - alias: Deactivation is still requested
+                condition: template
+                value_template: "{{ deactivation_entities | count > 0 }}"
+              - alias: No manual-off lockout became active
+                condition: template
+                value_template: "{{ not manual_off_lockout_active }}"
+              - alias: Deactivation is still unblocked
+                condition: template
+                value_template: "{{ not deactivation_blocked }}"
+              - alias: Target deactivation is still relevant
+                condition: template
+                value_template: >-
+                  {{ not effective_target_state_tracking
+                     or active_target_entities | count > 0 }}
+          - alias: Log deactivation
+            if:
+              - condition: template
+                value_template: "{{ logbook_enabled }}"
+            then:
+              - action: logbook.log
+                data:
+                  name: "{{ off_target_entities | join(', ') }}"
+                  message: is running its configured deactivation action
+                  entity_id: "{{ off_target_entities | first }}"
+          - alias: Run deactivation actions
+            choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ deactivation_actions | count > 0 }}"
+                sequence: !input deactivation_actions
+            default:
+              - action: homeassistant.turn_off
+                target:
+                  entity_id: "{{ off_target_entities }}"
