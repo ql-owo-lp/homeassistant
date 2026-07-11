@@ -1,6 +1,8 @@
 import re
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from jinja2 import StrictUndefined
 from jinja2.nativetypes import NativeEnvironment
@@ -296,6 +298,18 @@ class RuntimeStructureTests(unittest.TestCase):
         }
         self.assertTrue(required <= set(self.document["variables"]))
 
+    def test_activation_gate_and_manual_lockout_variables_are_present(self):
+        required = {
+            "illuminance_gate_passed",
+            "sun_gate_passed",
+            "light_gates_passed",
+            "activation_blocked",
+            "deactivation_blocked",
+            "manual_off_duration_seconds",
+            "manual_off_lockout_active",
+        }
+        self.assertTrue(required <= set(self.document["variables"]))
+
     def test_inputs_are_exposed_without_comma_splitting(self):
         variables = self.document["variables"]
         expected_inputs = {
@@ -311,6 +325,27 @@ class RuntimeStructureTests(unittest.TestCase):
             with self.subTest(variable=variable):
                 self.assertEqual({"!input": input_name}, variables[variable])
         self.assertNotIn("split(',')", str(variables))
+
+    def test_gate_blocker_and_manual_inputs_are_exposed_as_variables(self):
+        variables = self.document["variables"]
+        expected_inputs = {
+            "illuminance_enabled": "illuminance_enabled",
+            "illuminance_sensor": "illuminance_sensor",
+            "illuminance_threshold": "illuminance_threshold",
+            "sun_enabled": "sun_enabled",
+            "sun_elevation_threshold": "sun_elevation_threshold",
+            "light_gate_mode": "light_gate_mode",
+            "activation_blocker_entity": "activation_blocker_entity",
+            "activation_blocker_state_pattern": "activation_blocker_state_pattern",
+            "deactivation_blocker_entity": "deactivation_blocker_entity",
+            "deactivation_blocker_state_pattern": "deactivation_blocker_state_pattern",
+            "manual_off_enabled": "manual_off_enabled",
+            "manual_off_duration": "manual_off_duration",
+            "manual_off_state_pattern": "manual_off_state_pattern",
+        }
+        for variable, input_name in expected_inputs.items():
+            with self.subTest(variable=variable):
+                self.assertEqual({"!input": input_name}, variables[variable])
 
     def test_root_condition_requires_an_available_trigger(self):
         self.assertEqual(1, len(self.document["conditions"]))
@@ -343,6 +378,32 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
     @staticmethod
     def states_for(entity_states):
         return lambda entity_id: entity_states.get(entity_id, "unknown")
+
+    @staticmethod
+    def is_number(value):
+        try:
+            float(value)
+        except (TypeError, ValueError):
+            return False
+        return True
+
+    @staticmethod
+    def as_timestamp(value, default=None):
+        try:
+            return value.timestamp()
+        except (AttributeError, TypeError, ValueError):
+            return default
+
+    class States:
+        def __init__(self, entity_states):
+            self.entity_states = entity_states
+
+        def __call__(self, entity_id):
+            state = self.entity_states.get(entity_id)
+            return state.state if state is not None else "unknown"
+
+        def __getitem__(self, entity_id):
+            return self.entity_states.get(entity_id)
 
     def test_off_targets_default_to_targets_only_when_unconfigured(self):
         self.assertEqual(
@@ -480,6 +541,277 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
         stable = type("Trigger", (), {"id": "target_state_stable"})()
         self.assertFalse(
             self.render("trigger_source_allows_activation", trigger=stable)
+        )
+
+    def test_illuminance_gate_passes_when_disabled(self):
+        self.assertTrue(
+            self.render(
+                "illuminance_gate_passed",
+                illuminance_enabled=False,
+                illuminance_sensor="",
+                illuminance_threshold=100,
+                states=self.states_for({}),
+                is_number=self.is_number,
+            )
+        )
+
+    def test_illuminance_gate_requires_a_numeric_state_at_or_below_threshold(self):
+        for value, expected in (("99.5", True), ("100", True), ("100.1", False)):
+            with self.subTest(value=value):
+                self.assertIs(
+                    expected,
+                    self.render(
+                        "illuminance_gate_passed",
+                        illuminance_enabled=True,
+                        illuminance_sensor="sensor.lux",
+                        illuminance_threshold=100,
+                        states=self.states_for({"sensor.lux": value}),
+                        is_number=self.is_number,
+                    ),
+                )
+
+    def test_illuminance_gate_fails_closed_for_invalid_or_missing_state(self):
+        for sensor, value in (
+            ("sensor.lux", "unknown"),
+            ("sensor.lux", "unavailable"),
+            ("sensor.lux", "not numeric"),
+            ("", "42"),
+        ):
+            with self.subTest(sensor=sensor, value=value):
+                self.assertFalse(
+                    self.render(
+                        "illuminance_gate_passed",
+                        illuminance_enabled=True,
+                        illuminance_sensor=sensor,
+                        illuminance_threshold=100000,
+                        states=self.states_for({"sensor.lux": value}),
+                        is_number=self.is_number,
+                    )
+                )
+
+    def test_sun_gate_passes_when_disabled(self):
+        self.assertTrue(
+            self.render(
+                "sun_gate_passed",
+                sun_enabled=False,
+                sun_elevation_threshold=0,
+                state_attr=lambda entity_id, attribute: None,
+                is_number=self.is_number,
+            )
+        )
+
+    def test_sun_gate_requires_numeric_elevation_at_or_below_threshold(self):
+        for elevation, expected in ((-1, True), (0, True), (0.1, False)):
+            with self.subTest(elevation=elevation):
+                self.assertIs(
+                    expected,
+                    self.render(
+                        "sun_gate_passed",
+                        sun_enabled=True,
+                        sun_elevation_threshold=0,
+                        state_attr=lambda entity_id, attribute, value=elevation: value,
+                        is_number=self.is_number,
+                    ),
+                )
+        for elevation in (None, "not numeric"):
+            with self.subTest(elevation=elevation):
+                self.assertFalse(
+                    self.render(
+                        "sun_gate_passed",
+                        sun_enabled=True,
+                        sun_elevation_threshold=90,
+                        state_attr=lambda entity_id, attribute, value=elevation: value,
+                        is_number=self.is_number,
+                    )
+                )
+
+    def test_light_gate_combination_uses_enabled_gates_and_selected_mode(self):
+        cases = (
+            (False, False, False, False, "all", True),
+            (True, False, True, False, "all", True),
+            (True, False, False, True, "any", False),
+            (False, True, False, True, "all", True),
+            (False, True, True, False, "any", False),
+            (True, True, True, False, "any", True),
+            (True, True, True, False, "all", False),
+            (True, True, False, False, "any", False),
+        )
+        for lux_enabled, sun_enabled, lux_passed, sun_passed, mode, expected in cases:
+            with self.subTest(
+                lux_enabled=lux_enabled,
+                sun_enabled=sun_enabled,
+                lux_passed=lux_passed,
+                sun_passed=sun_passed,
+                mode=mode,
+            ):
+                self.assertIs(
+                    expected,
+                    self.render(
+                        "light_gates_passed",
+                        illuminance_enabled=lux_enabled,
+                        sun_enabled=sun_enabled,
+                        illuminance_gate_passed=lux_passed,
+                        sun_gate_passed=sun_passed,
+                        light_gate_mode=mode,
+                    ),
+                )
+
+    def test_blockers_require_entity_and_nonempty_pattern(self):
+        for variable, prefix in (
+            ("activation_blocked", "activation"),
+            ("deactivation_blocked", "deactivation"),
+        ):
+            for entity, pattern in (("", "on"), ("input_boolean.guard", ""), ("input_boolean.guard", "  ")):
+                with self.subTest(variable=variable, entity=entity, pattern=pattern):
+                    self.assertFalse(
+                        self.render(
+                            variable,
+                            **{
+                                f"{prefix}_blocker_entity": entity,
+                                f"{prefix}_blocker_state_pattern": pattern,
+                                "states": self.states_for({"input_boolean.guard": "on"}),
+                            },
+                        )
+                    )
+
+    def test_blockers_match_full_state_case_insensitively(self):
+        for variable, prefix in (
+            ("activation_blocked", "activation"),
+            ("deactivation_blocked", "deactivation"),
+        ):
+            for state, expected in (("ON", True), ("active", True), ("onward", False), ("inactive", False)):
+                with self.subTest(variable=variable, state=state):
+                    self.assertIs(
+                        expected,
+                        self.render(
+                            variable,
+                            **{
+                                f"{prefix}_blocker_entity": "input_boolean.guard",
+                                f"{prefix}_blocker_state_pattern": "on|active",
+                                "states": self.states_for({"input_boolean.guard": state}),
+                            },
+                        ),
+                    )
+
+    def test_manual_off_duration_mapping_is_summed_in_seconds(self):
+        self.assertEqual(
+            93784,
+            self.render(
+                "manual_off_duration_seconds",
+                manual_off_duration={
+                    "days": 1,
+                    "hours": 2,
+                    "minutes": 3,
+                    "seconds": 4,
+                },
+            ),
+        )
+        self.assertEqual(
+            3723,
+            self.render(
+                "manual_off_duration_seconds",
+                manual_off_duration={"hours": 1, "minutes": 2, "seconds": 3},
+            ),
+        )
+
+    def test_manual_off_lockout_requires_enabled_positive_duration_and_matching_state(self):
+        now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+        state = SimpleNamespace(state="off", last_changed=now - timedelta(seconds=10))
+        context = {
+            "target_entities": ["light.main"],
+            "manual_off_state_pattern": "off",
+            "states": self.States({"light.main": state}),
+            "now": lambda: now,
+            "as_timestamp": self.as_timestamp,
+        }
+        self.assertFalse(
+            self.render(
+                "manual_off_lockout_active",
+                manual_off_enabled=False,
+                manual_off_duration_seconds=30,
+                **context,
+            )
+        )
+        self.assertFalse(
+            self.render(
+                "manual_off_lockout_active",
+                manual_off_enabled=True,
+                manual_off_duration_seconds=0,
+                **context,
+            )
+        )
+        state.state = "on"
+        self.assertFalse(
+            self.render(
+                "manual_off_lockout_active",
+                manual_off_enabled=True,
+                manual_off_duration_seconds=30,
+                **context,
+            )
+        )
+
+    def test_manual_off_lockout_is_strictly_younger_than_duration(self):
+        now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+        for age, expected in ((29.9, True), (30, False), (31, False), (-1, False)):
+            with self.subTest(age=age):
+                state = SimpleNamespace(
+                    state="OFF", last_changed=now - timedelta(seconds=age)
+                )
+                self.assertIs(
+                    expected,
+                    self.render(
+                        "manual_off_lockout_active",
+                        manual_off_enabled=True,
+                        manual_off_duration_seconds=30,
+                        manual_off_state_pattern="off",
+                        target_entities=["light.main"],
+                        states=self.States({"light.main": state}),
+                        now=lambda: now,
+                        as_timestamp=self.as_timestamp,
+                    ),
+                )
+
+    def test_manual_off_lockout_uses_any_matching_target(self):
+        now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+        states = self.States(
+            {
+                "light.old": SimpleNamespace(
+                    state="off", last_changed=now - timedelta(minutes=10)
+                ),
+                "light.recent": SimpleNamespace(
+                    state="off", last_changed=now - timedelta(seconds=10)
+                ),
+                "light.on": SimpleNamespace(
+                    state="on", last_changed=now - timedelta(seconds=5)
+                ),
+            }
+        )
+        self.assertTrue(
+            self.render(
+                "manual_off_lockout_active",
+                manual_off_enabled=True,
+                manual_off_duration_seconds=30,
+                manual_off_state_pattern="off",
+                target_entities=["light.old", "light.on", "light.recent"],
+                states=states,
+                now=lambda: now,
+                as_timestamp=self.as_timestamp,
+            )
+        )
+
+    def test_manual_off_lockout_safely_ignores_missing_target_state(self):
+        now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+        self.assertFalse(
+            self.render(
+                "manual_off_lockout_active",
+                manual_off_enabled=True,
+                manual_off_duration_seconds=30,
+                manual_off_state_pattern="off",
+                target_entities=["light.missing"],
+                states=self.States({}),
+                now=lambda: now,
+                as_timestamp=self.as_timestamp,
+            )
         )
 
 

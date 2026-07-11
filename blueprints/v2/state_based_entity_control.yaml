@@ -378,6 +378,19 @@ variables:
   deactivation_state_pattern: !input deactivation_state_pattern
   target_state_pattern: !input target_state_pattern
   target_state_tracking: !input target_state_tracking
+  illuminance_enabled: !input illuminance_enabled
+  illuminance_sensor: !input illuminance_sensor
+  illuminance_threshold: !input illuminance_threshold
+  sun_enabled: !input sun_enabled
+  sun_elevation_threshold: !input sun_elevation_threshold
+  light_gate_mode: !input light_gate_mode
+  activation_blocker_entity: !input activation_blocker_entity
+  activation_blocker_state_pattern: !input activation_blocker_state_pattern
+  deactivation_blocker_entity: !input deactivation_blocker_entity
+  deactivation_blocker_state_pattern: !input deactivation_blocker_state_pattern
+  manual_off_enabled: !input manual_off_enabled
+  manual_off_duration: !input manual_off_duration
+  manual_off_state_pattern: !input manual_off_state_pattern
 
   off_target_entities: >-
     {{ configured_off_target_entities
@@ -435,6 +448,78 @@ variables:
 
   trigger_source_allows_activation: >-
     {{ trigger is not defined or trigger.id != 'target_state_stable' }}
+
+  illuminance_gate_passed: >-
+    {%- if not illuminance_enabled -%}
+      {{ true }}
+    {%- else -%}
+      {%- set illuminance_state = states(illuminance_sensor) if illuminance_sensor | trim != '' else none -%}
+      {{ illuminance_state is not none
+         and illuminance_state not in ['unknown', 'unavailable']
+         and is_number(illuminance_state)
+         and illuminance_state | float <= illuminance_threshold | float }}
+    {%- endif -%}
+
+  sun_gate_passed: >-
+    {%- if not sun_enabled -%}
+      {{ true }}
+    {%- else -%}
+      {%- set elevation = state_attr('sun.sun', 'elevation') -%}
+      {{ elevation is not none
+         and is_number(elevation)
+         and elevation | float <= sun_elevation_threshold | float }}
+    {%- endif -%}
+
+  light_gates_passed: >-
+    {%- if illuminance_enabled and sun_enabled -%}
+      {{ (illuminance_gate_passed or sun_gate_passed)
+         if light_gate_mode == 'any'
+         else (illuminance_gate_passed and sun_gate_passed) }}
+    {%- elif illuminance_enabled -%}
+      {{ illuminance_gate_passed }}
+    {%- elif sun_enabled -%}
+      {{ sun_gate_passed }}
+    {%- else -%}
+      {{ true }}
+    {%- endif -%}
+
+  activation_blocked: >-
+    {{ activation_blocker_entity | trim != ''
+       and activation_blocker_state_pattern | trim != ''
+       and states(activation_blocker_entity) is match('^(' ~ activation_blocker_state_pattern ~ ')$', ignorecase=true) }}
+
+  deactivation_blocked: >-
+    {{ deactivation_blocker_entity | trim != ''
+       and deactivation_blocker_state_pattern | trim != ''
+       and states(deactivation_blocker_entity) is match('^(' ~ deactivation_blocker_state_pattern ~ ')$', ignorecase=true) }}
+
+  manual_off_duration_seconds: >-
+    {{ (manual_off_duration.get('days', 0) | int(0) * 86400)
+       + (manual_off_duration.get('hours', 0) | int(0) * 3600)
+       + (manual_off_duration.get('minutes', 0) | int(0) * 60)
+       + (manual_off_duration.get('seconds', 0) | int(0)) }}
+
+  manual_off_lockout_active: >-
+    {%- set ns = namespace(active=false) -%}
+    {%- if manual_off_enabled
+          and manual_off_duration_seconds | float > 0
+          and manual_off_state_pattern | trim != '' -%}
+      {%- set current_timestamp = as_timestamp(now()) -%}
+      {%- for entity_id in target_entities -%}
+        {%- set state_object = states[entity_id] -%}
+        {%- if state_object is not none
+              and states(entity_id) is match('^(' ~ manual_off_state_pattern ~ ')$', ignorecase=true) -%}
+          {%- set changed_timestamp = as_timestamp(state_object.last_changed, none) -%}
+          {%- if changed_timestamp is not none -%}
+            {%- set age = current_timestamp - changed_timestamp -%}
+            {%- if age >= 0 and age < manual_off_duration_seconds | float -%}
+              {%- set ns.active = true -%}
+            {%- endif -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+    {{ ns.active }}
 
 triggers:
   - trigger: event
