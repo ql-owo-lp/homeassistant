@@ -1,0 +1,374 @@
+blueprint:
+  name: State Based Entity Control v2
+  description: >-
+    Coordinate one or more target entities from matching trigger states, with
+    configurable actions, light gates, blockers, time windows, and diagnostics.
+  domain: automation
+  homeassistant:
+    min_version: 2026.7.0
+  input:
+    core:
+      name: Core entities and timeout
+      icon: mdi:link-variant
+      input:
+        trigger_entities:
+          name: Trigger entities
+          description: Entities whose state changes evaluate this automation.
+          selector:
+            entity:
+              multiple: true
+        target_entities:
+          name: Target entities
+          description: Entities controlled by the configured actions.
+          selector:
+            entity:
+              multiple: true
+        off_target_entities:
+          name: Off target entities
+          description: Optional alternate entities used by deactivation actions.
+          default: []
+          selector:
+            entity:
+              multiple: true
+        main_timeout:
+          name: Main timeout
+          description: Delay before deactivation after triggers stop matching.
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 30
+          selector:
+            duration: {}
+
+    state_matching:
+      name: State matching
+      icon: mdi:regex
+      collapsed: true
+      input:
+        activation_state_pattern:
+          name: Activation state pattern
+          description: Regular expression matching states that activate targets.
+          default: "on"
+          selector:
+            text: {}
+        deactivation_state_pattern:
+          name: Deactivation state pattern
+          description: Optional regular expression for explicit deactivation states.
+          default: ""
+          selector:
+            text: {}
+        target_state_tracking:
+          name: Track target state
+          description: Re-evaluate when a target moves away from its desired state.
+          default: true
+          selector:
+            boolean: {}
+        target_state_pattern:
+          name: Target state pattern
+          description: Regular expression describing the desired target state.
+          default: "on"
+          selector:
+            text: {}
+
+    actions_config:
+      name: Actions
+      icon: mdi:play-box-multiple-outline
+      collapsed: true
+      input:
+        activation_actions:
+          name: Activation actions
+          description: Actions run when the activation criteria are met.
+          default: []
+          selector:
+            action: {}
+        deactivation_actions:
+          name: Deactivation actions
+          description: Actions run when targets should be deactivated.
+          default: []
+          selector:
+            action: {}
+
+    light_conditions:
+      name: Light conditions
+      icon: mdi:theme-light-dark
+      collapsed: true
+      input:
+        illuminance_enabled:
+          name: Enable illuminance gate
+          default: false
+          selector:
+            boolean: {}
+        illuminance_sensor:
+          name: Illuminance sensor
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+                  device_class: illuminance
+        illuminance_threshold:
+          name: Illuminance threshold
+          description: Activation is allowed below this light level.
+          default: 100
+          selector:
+            number:
+              min: 0
+              max: 100000
+              unit_of_measurement: lx
+              mode: box
+        sun_enabled:
+          name: Enable sun elevation gate
+          default: false
+          selector:
+            boolean: {}
+        sun_elevation_threshold:
+          name: Sun elevation threshold
+          description: Activation is allowed below this solar elevation.
+          default: 0
+          selector:
+            number:
+              min: -90
+              max: 90
+              unit_of_measurement: "°"
+        light_gate_mode:
+          name: Light gate mode
+          description: Require any enabled light gate or all enabled light gates.
+          default: any
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - any
+                - all
+
+    blocking:
+      name: Blocking
+      icon: mdi:block-helper
+      collapsed: true
+      input:
+        activation_blocker_entity:
+          name: Activation blocker entity
+          description: Optional entity that can prevent activation.
+          default: ""
+          selector:
+            entity: {}
+        activation_blocker_state_pattern:
+          name: Activation blocker state pattern
+          description: Regular expression for states that block activation.
+          default: "on"
+          selector:
+            text: {}
+        deactivation_blocker_entity:
+          name: Deactivation blocker entity
+          description: Optional entity that can prevent deactivation.
+          default: ""
+          selector:
+            entity: {}
+        deactivation_blocker_state_pattern:
+          name: Deactivation blocker state pattern
+          description: Regular expression for states that block deactivation.
+          default: "on"
+          selector:
+            text: {}
+
+    manual_off:
+      name: Manual off handling
+      icon: mdi:hand-back-right-off-outline
+      collapsed: true
+      input:
+        manual_off_enabled:
+          name: Enable manual off handling
+          default: false
+          selector:
+            boolean: {}
+        manual_off_duration:
+          name: Manual off duration
+          description: Time to suppress reactivation after a manual off state.
+          default:
+            hours: 0
+            minutes: 30
+            seconds: 0
+          selector:
+            duration: {}
+        manual_off_state_pattern:
+          name: Manual off state pattern
+          description: Regular expression identifying a manually switched-off target.
+          default: "off"
+          selector:
+            text: {}
+
+    execution_windows:
+      name: Execution windows
+      icon: mdi:calendar-clock
+      collapsed: true
+      input:
+        execution_schedule:
+          name: Execution schedule
+          description: Optional schedule entity that limits when actions may run.
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: schedule
+        execution_window_1_enabled:
+          name: Enable daily window 1
+          default: false
+          selector:
+            boolean: {}
+        execution_window_1_start:
+          name: Daily window 1 start
+          default: "00:00:00"
+          selector:
+            time: {}
+        execution_window_1_end:
+          name: Daily window 1 end
+          default: "00:00:00"
+          selector:
+            time: {}
+        execution_window_2_enabled:
+          name: Enable daily window 2
+          default: false
+          selector:
+            boolean: {}
+        execution_window_2_start:
+          name: Daily window 2 start
+          default: "00:00:00"
+          selector:
+            time: {}
+        execution_window_2_end:
+          name: Daily window 2 end
+          default: "00:00:00"
+          selector:
+            time: {}
+        execution_window_3_enabled:
+          name: Enable daily window 3
+          default: false
+          selector:
+            boolean: {}
+        execution_window_3_start:
+          name: Daily window 3 start
+          default: "00:00:00"
+          selector:
+            time: {}
+        execution_window_3_end:
+          name: Daily window 3 end
+          default: "00:00:00"
+          selector:
+            time: {}
+
+    alternate_timeouts:
+      name: Alternate timeouts
+      icon: mdi:timer-cog-outline
+      collapsed: true
+      input:
+        alternate_timeout_1_enabled:
+          name: Enable alternate timeout 1
+          default: false
+          selector:
+            boolean: {}
+        alternate_timeout_1_start:
+          name: Alternate timeout 1 start
+          default: "00:00:00"
+          selector:
+            time: {}
+        alternate_timeout_1_end:
+          name: Alternate timeout 1 end
+          default: "00:00:00"
+          selector:
+            time: {}
+        alternate_timeout_1_duration:
+          name: Alternate timeout 1 duration
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 30
+          selector:
+            duration: {}
+        alternate_timeout_2_enabled:
+          name: Enable alternate timeout 2
+          default: false
+          selector:
+            boolean: {}
+        alternate_timeout_2_start:
+          name: Alternate timeout 2 start
+          default: "00:00:00"
+          selector:
+            time: {}
+        alternate_timeout_2_end:
+          name: Alternate timeout 2 end
+          default: "00:00:00"
+          selector:
+            time: {}
+        alternate_timeout_2_duration:
+          name: Alternate timeout 2 duration
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 30
+          selector:
+            duration: {}
+        alternate_timeout_3_enabled:
+          name: Enable alternate timeout 3
+          default: false
+          selector:
+            boolean: {}
+        alternate_timeout_3_start:
+          name: Alternate timeout 3 start
+          default: "00:00:00"
+          selector:
+            time: {}
+        alternate_timeout_3_end:
+          name: Alternate timeout 3 end
+          default: "00:00:00"
+          selector:
+            time: {}
+        alternate_timeout_3_duration:
+          name: Alternate timeout 3 duration
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 30
+          selector:
+            duration: {}
+
+    advanced:
+      name: Advanced ranges
+      icon: mdi:code-braces
+      description: >-
+        Execution ranges use one start-end range per line. Alternate timeouts
+        use start-end,duration per line. Times use HH:MM:SS; ranges may cross
+        midnight.
+      collapsed: true
+      input:
+        advanced_execution_ranges:
+          name: Advanced execution ranges
+          description: Optional execution ranges in start-end format, one per line.
+          default: ""
+          selector:
+            text:
+              multiline: true
+        advanced_alternate_timeouts:
+          name: Advanced alternate timeouts
+          description: Optional start-end,duration entries, one per line.
+          default: ""
+          selector:
+            text:
+              multiline: true
+
+    diagnostics:
+      name: Diagnostics
+      icon: mdi:text-box-search-outline
+      collapsed: true
+      input:
+        logbook_enabled:
+          name: Enable logbook diagnostics
+          description: Record blueprint decisions in the Home Assistant logbook.
+          default: true
+          selector:
+            boolean: {}
+
+mode: restart
+variables: {}
+triggers: []
+conditions: []
+actions: []
