@@ -271,22 +271,39 @@ class RuntimeStructureTests(unittest.TestCase):
                 "automation_reloaded",
                 "home_assistant_started",
                 "trigger_entity_changed",
+                "target_state_changed",
                 "target_state_stable",
                 "manual_lockout_expired",
             ],
             [trigger["id"] for trigger in triggers],
         )
         self.assertEqual(
-            ["event", "homeassistant", "state", "state", "state"],
+            ["event", "homeassistant", "state", "state", "state", "state"],
             [trigger["trigger"] for trigger in triggers],
         )
         self.assertEqual("automation_reloaded", triggers[0]["event_type"])
         self.assertEqual("start", triggers[1]["event"])
         self.assertEqual({"!input": "trigger_entities"}, triggers[2]["entity_id"])
         self.assertEqual({"!input": "target_entities"}, triggers[3]["entity_id"])
-        self.assertEqual({"seconds": 3}, triggers[3]["for"])
+        self.assertNotIn("for", triggers[3])
         self.assertEqual({"!input": "target_entities"}, triggers[4]["entity_id"])
-        self.assertEqual({"!input": "manual_off_duration"}, triggers[4]["for"])
+        self.assertEqual({"seconds": 3}, triggers[4]["for"])
+        self.assertEqual({"!input": "target_entities"}, triggers[5]["entity_id"])
+        self.assertEqual({"!input": "manual_off_duration"}, triggers[5]["for"])
+
+    def test_immediate_target_change_restarts_the_shared_lockout_wait(self):
+        immediate = next(
+            trigger
+            for trigger in self.document["triggers"]
+            if trigger["id"] == "target_state_changed"
+        )
+        self.assertEqual("restart", self.document["mode"])
+        self.assertEqual({"!input": "target_entities"}, immediate["entity_id"])
+        self.assertNotIn("for", immediate)
+        self.assertEqual(
+            "{{ manual_off_lockout_remaining_seconds }}",
+            self.document["actions"][0]["then"][0]["delay"]["seconds"],
+        )
 
     def test_required_normalized_variables_are_present(self):
         required = {
@@ -572,7 +589,7 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
                     )
                 )
 
-    def test_only_target_stability_blocks_activation_by_trigger_source(self):
+    def test_non_target_sources_allow_activation(self):
         self.assertTrue(self.render("trigger_source_allows_activation"))
         for trigger_id in (
             "automation_reloaded",
@@ -583,12 +600,32 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
             with self.subTest(trigger_id=trigger_id):
                 trigger = type("Trigger", (), {"id": trigger_id})()
                 self.assertTrue(
-                    self.render("trigger_source_allows_activation", trigger=trigger)
+                    self.render(
+                        "trigger_source_allows_activation",
+                        trigger=trigger,
+                        manual_off_lockout_active=False,
+                    )
                 )
-        stable = type("Trigger", (), {"id": "target_state_stable"})()
-        self.assertFalse(
-            self.render("trigger_source_allows_activation", trigger=stable)
-        )
+
+    def test_target_change_sources_allow_activation_only_after_lockout_wait(self):
+        for trigger_id in ("target_state_changed", "target_state_stable"):
+            trigger = type("Trigger", (), {"id": trigger_id})()
+            with self.subTest(trigger_id=trigger_id, lockout=False):
+                self.assertFalse(
+                    self.render(
+                        "trigger_source_allows_activation",
+                        trigger=trigger,
+                        manual_off_lockout_active=False,
+                    )
+                )
+            with self.subTest(trigger_id=trigger_id, lockout=True):
+                self.assertTrue(
+                    self.render(
+                        "trigger_source_allows_activation",
+                        trigger=trigger,
+                        manual_off_lockout_active=True,
+                    )
+                )
 
     def test_illuminance_gate_passes_when_disabled(self):
         self.assertTrue(
