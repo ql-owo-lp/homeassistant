@@ -446,11 +446,6 @@ variables:
     {%- endfor -%}
     {{ target_state_tracking and not ns.has_stateless_target }}
 
-  trigger_source_allows_activation: >-
-    {{ trigger is not defined
-       or trigger.id not in ['target_state_changed', 'target_state_stable']
-       or manual_off_lockout_active }}
-
   illuminance_gate_passed: >-
     {%- if not illuminance_enabled -%}
       {{ true }}
@@ -527,6 +522,11 @@ variables:
 
   manual_off_lockout_active: >-
     {{ manual_off_lockout_remaining_seconds | float > 0 }}
+
+  trigger_source_allows_activation: >-
+    {{ trigger is not defined
+       or trigger.id not in ['target_state_changed', 'target_state_stable']
+       or manual_off_lockout_active }}
 
 triggers:
   - trigger: event

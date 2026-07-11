@@ -329,6 +329,18 @@ class RuntimeStructureTests(unittest.TestCase):
         }
         self.assertTrue(required <= set(self.document["variables"]))
 
+    def test_trigger_source_decision_follows_lockout_dependencies(self):
+        variable_order = list(self.document["variables"])
+        source_index = variable_order.index("trigger_source_allows_activation")
+        self.assertLess(
+            variable_order.index("manual_off_lockout_remaining_seconds"),
+            source_index,
+        )
+        self.assertLess(
+            variable_order.index("manual_off_lockout_active"),
+            source_index,
+        )
+
     def test_inputs_are_exposed_without_comma_splitting(self):
         variables = self.document["variables"]
         expected_inputs = {
