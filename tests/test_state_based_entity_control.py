@@ -221,6 +221,9 @@ class BlueprintUiTests(unittest.TestCase):
         self.assertIn("start-end,duration", advanced_description)
         self.assertIn("HH:MM:SS", advanced_description)
         self.assertIn("semicolon", advanced_description.lower())
+        self.assertIn("one- or two-digit", advanced_description.lower())
+        self.assertIn("decimal", advanced_description.lower())
+        self.assertIn("numeric seconds", advanced_description.lower())
         self.assertNotIn("per line", advanced_description.lower())
         for input_name in (
             "advanced_execution_ranges",
@@ -504,13 +507,29 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
         cls.variables = cls.document["variables"]
         cls.environment = NativeEnvironment(undefined=StrictUndefined)
         cls.environment.tests["match"] = cls._regex_match
+        cls.environment.filters["regex_replace"] = cls._regex_replace
 
     @staticmethod
     def _regex_match(value, pattern, ignorecase=False):
         flags = re.IGNORECASE if ignorecase else 0
         return re.match(pattern, str(value), flags) is not None
 
+    @staticmethod
+    def _regex_replace(value, pattern, replacement="", ignorecase=False):
+        flags = re.IGNORECASE if ignorecase else 0
+        return re.sub(pattern, replacement, str(value), flags=flags)
+
     def render(self, variable, **context):
+        if "advanced_execution_ranges" in context:
+            context.setdefault(
+                "advanced_execution_ranges_normalized",
+                re.sub(r"\s+", "", context["advanced_execution_ranges"]),
+            )
+        if "advanced_alternate_timeouts" in context:
+            context.setdefault(
+                "advanced_alternate_timeouts_normalized",
+                re.sub(r"\s+", "", context["advanced_alternate_timeouts"]),
+            )
         return self.environment.from_string(self.variables[variable]).render(**context)
 
     @staticmethod
@@ -1034,6 +1053,57 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
                         advanced_alternate_timeouts=alternate,
                     )
                 )
+
+    def test_advanced_ranges_ignore_all_whitespace(self):
+        execution = "\t9:00:00 - 10:00:00;\n 11:00:00-12:00:00\r\n"
+        alternate = "\n9:00:00-10:00:00, 1.5;\t11:00:00-12:00:00,1:02:03.5"
+        self.assertTrue(
+            self.render(
+                "advanced_ranges_valid",
+                advanced_execution_ranges=execution,
+                advanced_alternate_timeouts=alternate,
+            )
+        )
+        self.assertEqual(
+            "9:00:00-10:00:00;11:00:00-12:00:00",
+            self.render(
+                "advanced_execution_ranges_normalized",
+                advanced_execution_ranges=execution,
+            ),
+        )
+
+    def test_whitespace_only_advanced_ranges_are_not_configured(self):
+        self.assertTrue(
+            self.render(
+                "advanced_ranges_valid",
+                advanced_execution_ranges=" \n\t\r ",
+                advanced_alternate_timeouts="\n\t",
+            )
+        )
+        self.assertFalse(
+            self.render(
+                "execution_window_configured",
+                execution_schedule="",
+                native_execution_windows=[],
+                advanced_execution_ranges=" \n\t\r ",
+            )
+        )
+
+    def test_multiline_alternate_timeout_is_resolved(self):
+        now = datetime(2026, 7, 11, 11, 30, tzinfo=timezone.utc)
+        self.assertEqual(
+            7.5,
+            self.render(
+                "resolved_timeout_seconds",
+                advanced_ranges_valid=True,
+                native_timeout_windows=[],
+                advanced_alternate_timeouts=(
+                    "9:00:00-10:00:00,1;\n\t11:00:00 - 12:00:00, 7.5"
+                ),
+                main_timeout={"seconds": 30},
+                now=lambda: now,
+            ),
+        )
 
     def test_advanced_range_validation_rejects_malformed_fields_times_and_durations(self):
         invalid_cases = (

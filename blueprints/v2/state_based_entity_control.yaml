@@ -337,19 +337,25 @@ blueprint:
       description: >-
         Execution ranges use start-end ranges separated by semicolons.
         Alternate timeouts use semicolon-separated start-end,duration entries.
-        Times use HH:MM:SS; ranges may cross midnight.
+        Times use one- or two-digit hours in H:MM:SS or HH:MM:SS form and may
+        include decimal seconds; ranges may cross midnight. Timeout durations
+        accept numeric seconds or H:MM:SS with optional decimal seconds.
       collapsed: true
       input:
         advanced_execution_ranges:
           name: Advanced execution ranges
-          description: Optional semicolon-separated execution ranges in start-end format.
+          description: >-
+            Optional semicolon-separated start-end ranges. Times accept one- or
+            two-digit hours and optional decimal seconds.
           default: ""
           selector:
             text:
               multiline: true
         advanced_alternate_timeouts:
           name: Advanced alternate timeouts
-          description: Optional semicolon-separated start-end,duration entries.
+          description: >-
+            Optional semicolon-separated start-end,duration entries. Duration
+            accepts numeric seconds or H:MM:SS with optional decimal seconds.
           default: ""
           selector:
             text:
@@ -394,6 +400,10 @@ variables:
   execution_schedule: !input execution_schedule
   advanced_execution_ranges: !input advanced_execution_ranges
   advanced_alternate_timeouts: !input advanced_alternate_timeouts
+  advanced_execution_ranges_normalized: >-
+    {{ advanced_execution_ranges | regex_replace('\\s+', '') }}
+  advanced_alternate_timeouts_normalized: >-
+    {{ advanced_alternate_timeouts | regex_replace('\\s+', '') }}
   main_timeout: !input main_timeout
   native_execution_windows:
     - enabled: !input execution_window_1_enabled
@@ -425,12 +435,12 @@ variables:
     {%- set execution_pattern = '^(?:' ~ time_pattern ~ ')-(?:' ~ time_pattern ~ ')\\Z' -%}
     {%- set timeout_pattern = '^(?:' ~ time_pattern ~ ')-(?:' ~ time_pattern ~ '),(?:' ~ duration_pattern ~ ')\\Z' -%}
     {%- set ns = namespace(valid=true) -%}
-    {%- for entry in advanced_execution_ranges.replace(' ', '').split(';') -%}
+    {%- for entry in advanced_execution_ranges_normalized.split(';') -%}
       {%- if entry != '' and not (entry is match(execution_pattern)) -%}
         {%- set ns.valid = false -%}
       {%- endif -%}
     {%- endfor -%}
-    {%- for entry in advanced_alternate_timeouts.replace(' ', '').split(';') -%}
+    {%- for entry in advanced_alternate_timeouts_normalized.split(';') -%}
       {%- if entry != '' and not (entry is match(timeout_pattern)) -%}
         {%- set ns.valid = false -%}
       {%- endif -%}
@@ -443,12 +453,12 @@ variables:
     {%- set execution_pattern = '^(?:' ~ time_pattern ~ ')-(?:' ~ time_pattern ~ ')\\Z' -%}
     {%- set timeout_pattern = '^(?:' ~ time_pattern ~ ')-(?:' ~ time_pattern ~ '),(?:' ~ duration_pattern ~ ')\\Z' -%}
     {%- set ns = namespace(error='') -%}
-    {%- for entry in advanced_execution_ranges.replace(' ', '').split(';') -%}
+    {%- for entry in advanced_execution_ranges_normalized.split(';') -%}
       {%- if ns.error == '' and entry != '' and not (entry is match(execution_pattern)) -%}
         {%- set ns.error = "Invalid advanced execution range '" ~ entry ~ "'; expected start-end" -%}
       {%- endif -%}
     {%- endfor -%}
-    {%- for entry in advanced_alternate_timeouts.replace(' ', '').split(';') -%}
+    {%- for entry in advanced_alternate_timeouts_normalized.split(';') -%}
       {%- if ns.error == '' and entry != '' and not (entry is match(timeout_pattern)) -%}
         {%- set ns.error = "Invalid advanced alternate timeout '" ~ entry ~ "'; expected start-end,duration" -%}
       {%- endif -%}
@@ -462,7 +472,7 @@ variables:
         {%- set ns.configured = true -%}
       {%- endif -%}
     {%- endfor -%}
-    {%- for entry in advanced_execution_ranges.replace(' ', '').split(';') -%}
+    {%- for entry in advanced_execution_ranges_normalized.split(';') -%}
       {%- if entry != '' -%}
         {%- set ns.configured = true -%}
       {%- endif -%}
@@ -490,7 +500,7 @@ variables:
           {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
-      {%- for entry in advanced_execution_ranges.replace(' ', '').split(';') -%}
+      {%- for entry in advanced_execution_ranges_normalized.split(';') -%}
         {%- if entry != '' -%}
           {%- set boundaries = entry.split('-') -%}
           {%- set start_parts = boundaries[0].split(':') -%}
@@ -538,7 +548,7 @@ variables:
           {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
-      {%- for entry in advanced_alternate_timeouts.replace(' ', '').split(';') -%}
+      {%- for entry in advanced_alternate_timeouts_normalized.split(';') -%}
         {%- if not ns.found and entry != '' -%}
           {%- set fields = entry.split(',') -%}
           {%- set boundaries = fields[0].split('-') -%}
