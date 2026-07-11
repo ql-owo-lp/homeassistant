@@ -105,6 +105,8 @@ class BlueprintUiTests(unittest.TestCase):
             "sun_elevation_threshold": "number",
             "light_gate_mode": "select",
             "target_state_tracking": "boolean",
+            "activation_blocker_entity": "entity",
+            "deactivation_blocker_entity": "entity",
             "manual_off_enabled": "boolean",
             "manual_off_duration": "duration",
             "execution_schedule": "entity",
@@ -225,17 +227,17 @@ class BlueprintUiTests(unittest.TestCase):
         self.assertEqual(12, len(alternate_inputs))
         for slot in range(1, 4):
             with self.subTest(execution_slot=slot):
-                self.assertIs(
-                    False, execution_inputs[f"execution_window_{slot}_enabled"]["default"]
-                )
+                enabled = execution_inputs[f"execution_window_{slot}_enabled"]
+                self.assertIs(False, enabled["default"])
+                self.assertIn("boolean", enabled["selector"])
                 for boundary in ("start", "end"):
                     config = execution_inputs[f"execution_window_{slot}_{boundary}"]
                     self.assertEqual("00:00:00", config["default"])
                     self.assertIn("time", config["selector"])
             with self.subTest(alternate_timeout_slot=slot):
-                self.assertIs(
-                    False, alternate_inputs[f"alternate_timeout_{slot}_enabled"]["default"]
-                )
+                enabled = alternate_inputs[f"alternate_timeout_{slot}_enabled"]
+                self.assertIs(False, enabled["default"])
+                self.assertIn("boolean", enabled["selector"])
                 for boundary in ("start", "end"):
                     config = alternate_inputs[f"alternate_timeout_{slot}_{boundary}"]
                     self.assertEqual("00:00:00", config["default"])
