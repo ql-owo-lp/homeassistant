@@ -2,7 +2,7 @@
 
 ## Summary
 
-Modernize `blueprints/state_based_entity_control.yaml` as a version 2 Home
+Create `blueprints/v2/state_based_entity_control.yaml` as a version 2 Home
 Assistant automation blueprint. Version 2 may change its input schema and will
 require Home Assistant 2026.7.0 or newer, but it must retain every capability of
 the current blueprint. Configuration must be available from Home Assistant's

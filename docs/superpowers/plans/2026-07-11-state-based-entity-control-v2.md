@@ -12,7 +12,7 @@
 
 ## File map
 
-- Modify `blueprints/state_based_entity_control.yaml`: the complete v2 blueprint, including UI inputs, normalized variables, triggers, gates, lockout logic, timeout resolution, actions, and trace aliases.
+- Create `blueprints/v2/state_based_entity_control.yaml`: the complete v2 blueprint, including UI inputs, normalized variables, triggers, gates, lockout logic, timeout resolution, actions, and trace aliases. Preserve the v1 blueprint at its existing path.
 - Create `tests/test_state_based_entity_control.py`: fast blueprint contract and template behavior tests that run without installing Home Assistant.
 - Create `tests/validate_state_based_entity_control.sh`: build a temporary Home Assistant configuration, instantiate the blueprint through `use_blueprint`, and run Home Assistant's configuration checker in the pinned container.
 - Reference `docs/superpowers/specs/2026-07-11-state-based-entity-control-v2-design.md`: approved behavior contract; do not modify unless implementation exposes a genuine contradiction.
@@ -21,7 +21,7 @@
 
 **Files:**
 - Create: `tests/test_state_based_entity_control.py`
-- Modify: `blueprints/state_based_entity_control.yaml:1-206`
+- Create: `blueprints/v2/state_based_entity_control.yaml`
 
 - [ ] **Step 1: Write the failing metadata and UI contract tests**
 
@@ -150,7 +150,7 @@ Expected: failures for the missing `homeassistant` metadata, sections, and v2 in
 
 - [ ] **Step 3: Replace the blueprint metadata and input block**
 
-In `blueprints/state_based_entity_control.yaml`, retain the name with a `v2`
+In `blueprints/v2/state_based_entity_control.yaml`, use the name with a `v2`
 suffix, rewrite the description, declare `min_version: 2026.7.0`, and define
 the ten tested sections in the tested order. Use these exact selector shapes and
 defaults throughout the section definitions:
@@ -460,7 +460,7 @@ Expected: four tests pass.
 - [ ] **Step 5: Commit the v2 UI contract**
 
 ```bash
-git add blueprints/state_based_entity_control.yaml tests/test_state_based_entity_control.py
+git add blueprints/v2/state_based_entity_control.yaml tests/test_state_based_entity_control.py
 git commit -m "feat: add state control v2 blueprint inputs"
 ```
 
@@ -468,7 +468,7 @@ git commit -m "feat: add state control v2 blueprint inputs"
 
 **Files:**
 - Modify: `tests/test_state_based_entity_control.py`
-- Modify: `blueprints/state_based_entity_control.yaml`
+- Modify: `blueprints/v2/state_based_entity_control.yaml`
 
 - [ ] **Step 1: Add failing structure tests for triggers and core variables**
 
@@ -634,7 +634,7 @@ python3 -m unittest discover -s tests -v
 Expected: seven tests pass.
 
 ```bash
-git add blueprints/state_based_entity_control.yaml tests/test_state_based_entity_control.py
+git add blueprints/v2/state_based_entity_control.yaml tests/test_state_based_entity_control.py
 git commit -m "feat: normalize state control runtime"
 ```
 
@@ -642,7 +642,7 @@ git commit -m "feat: normalize state control runtime"
 
 **Files:**
 - Modify: `tests/test_state_based_entity_control.py`
-- Modify: `blueprints/state_based_entity_control.yaml`
+- Modify: `blueprints/v2/state_based_entity_control.yaml`
 
 - [ ] **Step 1: Add failing tests for gate variables and lockout wiring**
 
@@ -764,7 +764,7 @@ python3 -m unittest discover -s tests -v
 Expected: nine tests pass.
 
 ```bash
-git add blueprints/state_based_entity_control.yaml tests/test_state_based_entity_control.py
+git add blueprints/v2/state_based_entity_control.yaml tests/test_state_based_entity_control.py
 git commit -m "feat: add activation gates and manual lockout"
 ```
 
@@ -772,7 +772,7 @@ git commit -m "feat: add activation gates and manual lockout"
 
 **Files:**
 - Modify: `tests/test_state_based_entity_control.py`
-- Modify: `blueprints/state_based_entity_control.yaml`
+- Modify: `blueprints/v2/state_based_entity_control.yaml`
 
 - [ ] **Step 1: Add failing schedule and timeout contract tests**
 
@@ -994,7 +994,7 @@ python3 -m unittest discover -s tests -v
 Expected: eleven tests pass.
 
 ```bash
-git add blueprints/state_based_entity_control.yaml tests/test_state_based_entity_control.py
+git add blueprints/v2/state_based_entity_control.yaml tests/test_state_based_entity_control.py
 git commit -m "feat: add UI schedules and alternate timeouts"
 ```
 
@@ -1002,7 +1002,7 @@ git commit -m "feat: add UI schedules and alternate timeouts"
 
 **Files:**
 - Modify: `tests/test_state_based_entity_control.py`
-- Modify: `blueprints/state_based_entity_control.yaml`
+- Modify: `blueprints/v2/state_based_entity_control.yaml`
 
 - [ ] **Step 1: Add failing action-flow contract tests**
 
@@ -1125,7 +1125,7 @@ python3 -m unittest discover -s tests -v
 Expected: fourteen tests pass.
 
 ```bash
-git add blueprints/state_based_entity_control.yaml tests/test_state_based_entity_control.py
+git add blueprints/v2/state_based_entity_control.yaml tests/test_state_based_entity_control.py
 git commit -m "feat: add traced state control actions"
 ```
 
@@ -1173,7 +1173,7 @@ config_dir="$(mktemp -d)"
 trap 'rm -rf "${config_dir}"' EXIT
 
 mkdir -p "${config_dir}/blueprints/automation/local"
-cp "${repo_dir}/blueprints/state_based_entity_control.yaml" \
+cp "${repo_dir}/blueprints/v2/state_based_entity_control.yaml" \
   "${config_dir}/blueprints/automation/local/state_based_entity_control.yaml"
 
 cat >"${config_dir}/configuration.yaml" <<'YAML'
@@ -1221,14 +1221,14 @@ commands.
 - [ ] **Step 5: Commit integration validation**
 
 ```bash
-git add blueprints/state_based_entity_control.yaml tests/test_state_based_entity_control.py tests/validate_state_based_entity_control.sh
+git add blueprints/v2/state_based_entity_control.yaml tests/test_state_based_entity_control.py tests/validate_state_based_entity_control.sh
 git commit -m "test: validate blueprint with Home Assistant 2026.7"
 ```
 
 ### Task 7: Complete regression review and handoff
 
 **Files:**
-- Modify: `blueprints/state_based_entity_control.yaml` only if verification exposes an issue
+- Modify: `blueprints/v2/state_based_entity_control.yaml` only if verification exposes an issue
 - Modify: `tests/test_state_based_entity_control.py` only when adding a regression assertion
 
 - [ ] **Step 1: Compare implemented inputs against every approved capability**
@@ -1238,7 +1238,7 @@ Run:
 ```bash
 rg -n '^## |^- Preserve|^- Add|^- Home Assistant|^- No version' \
   docs/superpowers/specs/2026-07-11-state-based-entity-control-v2-design.md
-rg -n 'name:|alias:' blueprints/state_based_entity_control.yaml
+rg -n 'name:|alias:' blueprints/v2/state_based_entity_control.yaml
 ```
 
 Expected: each preserved feature and acceptance criterion maps to an input,
@@ -1277,7 +1277,7 @@ If Step 3 required a correction, commit only the blueprint and its regression
 test:
 
 ```bash
-git add blueprints/state_based_entity_control.yaml tests/test_state_based_entity_control.py
+git add blueprints/v2/state_based_entity_control.yaml tests/test_state_based_entity_control.py
 git commit -m "fix: complete state control v2 regression coverage"
 ```
 
