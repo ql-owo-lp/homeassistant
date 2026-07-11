@@ -799,6 +799,27 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
             )
         )
 
+    def test_manual_off_lockout_pattern_is_fully_anchored(self):
+        now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+        for target_state in ("offering", "cutoff"):
+            with self.subTest(target_state=target_state):
+                state = SimpleNamespace(
+                    state=target_state,
+                    last_changed=now - timedelta(seconds=10),
+                )
+                self.assertFalse(
+                    self.render(
+                        "manual_off_lockout_active",
+                        manual_off_enabled=True,
+                        manual_off_duration_seconds=30,
+                        manual_off_state_pattern="off",
+                        target_entities=["light.main"],
+                        states=self.States({"light.main": state}),
+                        now=lambda: now,
+                        as_timestamp=self.as_timestamp,
+                    )
+                )
+
     def test_manual_off_lockout_safely_ignores_missing_target_state(self):
         now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
         self.assertFalse(
