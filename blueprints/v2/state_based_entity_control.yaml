@@ -335,21 +335,21 @@ blueprint:
       name: Advanced ranges
       icon: mdi:code-braces
       description: >-
-        Execution ranges use one start-end range per line. Alternate timeouts
-        use start-end,duration per line. Times use HH:MM:SS; ranges may cross
-        midnight.
+        Execution ranges use start-end ranges separated by semicolons.
+        Alternate timeouts use semicolon-separated start-end,duration entries.
+        Times use HH:MM:SS; ranges may cross midnight.
       collapsed: true
       input:
         advanced_execution_ranges:
           name: Advanced execution ranges
-          description: Optional execution ranges in start-end format, one per line.
+          description: Optional semicolon-separated execution ranges in start-end format.
           default: ""
           selector:
             text:
               multiline: true
         advanced_alternate_timeouts:
           name: Advanced alternate timeouts
-          description: Optional start-end,duration entries, one per line.
+          description: Optional semicolon-separated start-end,duration entries.
           default: ""
           selector:
             text:
@@ -391,6 +391,176 @@ variables:
   manual_off_enabled: !input manual_off_enabled
   manual_off_duration: !input manual_off_duration
   manual_off_state_pattern: !input manual_off_state_pattern
+  execution_schedule: !input execution_schedule
+  advanced_execution_ranges: !input advanced_execution_ranges
+  advanced_alternate_timeouts: !input advanced_alternate_timeouts
+  main_timeout: !input main_timeout
+  native_execution_windows:
+    - enabled: !input execution_window_1_enabled
+      start: !input execution_window_1_start
+      end: !input execution_window_1_end
+    - enabled: !input execution_window_2_enabled
+      start: !input execution_window_2_start
+      end: !input execution_window_2_end
+    - enabled: !input execution_window_3_enabled
+      start: !input execution_window_3_start
+      end: !input execution_window_3_end
+  native_timeout_windows:
+    - enabled: !input alternate_timeout_1_enabled
+      start: !input alternate_timeout_1_start
+      end: !input alternate_timeout_1_end
+      duration: !input alternate_timeout_1_duration
+    - enabled: !input alternate_timeout_2_enabled
+      start: !input alternate_timeout_2_start
+      end: !input alternate_timeout_2_end
+      duration: !input alternate_timeout_2_duration
+    - enabled: !input alternate_timeout_3_enabled
+      start: !input alternate_timeout_3_start
+      end: !input alternate_timeout_3_end
+      duration: !input alternate_timeout_3_duration
+
+  advanced_ranges_valid: >-
+    {%- set time_pattern = '(?:[0-9]|[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?' -%}
+    {%- set duration_pattern = '(?:[0-9]+(?:\\.[0-9]+)?|[0-9]+:[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?)' -%}
+    {%- set execution_pattern = '^(?:' ~ time_pattern ~ ')-(?:' ~ time_pattern ~ ')\\Z' -%}
+    {%- set timeout_pattern = '^(?:' ~ time_pattern ~ ')-(?:' ~ time_pattern ~ '),(?:' ~ duration_pattern ~ ')\\Z' -%}
+    {%- set ns = namespace(valid=true) -%}
+    {%- for entry in advanced_execution_ranges.replace(' ', '').split(';') -%}
+      {%- if entry != '' and not (entry is match(execution_pattern)) -%}
+        {%- set ns.valid = false -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- for entry in advanced_alternate_timeouts.replace(' ', '').split(';') -%}
+      {%- if entry != '' and not (entry is match(timeout_pattern)) -%}
+        {%- set ns.valid = false -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ ns.valid }}
+
+  advanced_ranges_error: >-
+    {%- set time_pattern = '(?:[0-9]|[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?' -%}
+    {%- set duration_pattern = '(?:[0-9]+(?:\\.[0-9]+)?|[0-9]+:[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?)' -%}
+    {%- set execution_pattern = '^(?:' ~ time_pattern ~ ')-(?:' ~ time_pattern ~ ')\\Z' -%}
+    {%- set timeout_pattern = '^(?:' ~ time_pattern ~ ')-(?:' ~ time_pattern ~ '),(?:' ~ duration_pattern ~ ')\\Z' -%}
+    {%- set ns = namespace(error='') -%}
+    {%- for entry in advanced_execution_ranges.replace(' ', '').split(';') -%}
+      {%- if ns.error == '' and entry != '' and not (entry is match(execution_pattern)) -%}
+        {%- set ns.error = "Invalid advanced execution range '" ~ entry ~ "'; expected start-end" -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- for entry in advanced_alternate_timeouts.replace(' ', '').split(';') -%}
+      {%- if ns.error == '' and entry != '' and not (entry is match(timeout_pattern)) -%}
+        {%- set ns.error = "Invalid advanced alternate timeout '" ~ entry ~ "'; expected start-end,duration" -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ ns.error }}
+
+  execution_window_configured: >-
+    {%- set ns = namespace(configured=execution_schedule | trim != '') -%}
+    {%- for window in native_execution_windows -%}
+      {%- if window.enabled -%}
+        {%- set ns.configured = true -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- for entry in advanced_execution_ranges.replace(' ', '').split(';') -%}
+      {%- if entry != '' -%}
+        {%- set ns.configured = true -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ ns.configured }}
+
+  execution_allowed: >-
+    {%- set current = now() -%}
+    {%- set current_seconds = current.hour * 3600 + current.minute * 60 + current.second + current.microsecond / 1000000 -%}
+    {%- set ns = namespace(allowed=not execution_window_configured) -%}
+    {%- if advanced_ranges_valid and execution_window_configured -%}
+      {%- if execution_schedule | trim != '' and states(execution_schedule) == 'on' -%}
+        {%- set ns.allowed = true -%}
+      {%- endif -%}
+      {%- for window in native_execution_windows -%}
+        {%- if window.enabled -%}
+          {%- set start_parts = window.start.split(':') -%}
+          {%- set end_parts = window.end.split(':') -%}
+          {%- set start = start_parts[0] | float * 3600 + start_parts[1] | float * 60 + start_parts[2] | float -%}
+          {%- set end = end_parts[0] | float * 3600 + end_parts[1] | float * 60 + end_parts[2] | float -%}
+          {%- if start == end
+                or (start < end and start <= current_seconds <= end)
+                or (start > end and (current_seconds >= start or current_seconds <= end)) -%}
+            {%- set ns.allowed = true -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- for entry in advanced_execution_ranges.replace(' ', '').split(';') -%}
+        {%- if entry != '' -%}
+          {%- set boundaries = entry.split('-') -%}
+          {%- set start_parts = boundaries[0].split(':') -%}
+          {%- set end_parts = boundaries[1].split(':') -%}
+          {%- set start = start_parts[0] | float * 3600 + start_parts[1] | float * 60 + start_parts[2] | float -%}
+          {%- set end = end_parts[0] | float * 3600 + end_parts[1] | float * 60 + end_parts[2] | float -%}
+          {%- if start == end
+                or (start < end and start <= current_seconds <= end)
+                or (start > end and (current_seconds >= start or current_seconds <= end)) -%}
+            {%- set ns.allowed = true -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+    {{ ns.allowed }}
+
+  resolved_timeout_seconds: >-
+    {%- set main_seconds =
+          (main_timeout.get('days', 0) | float(0) * 86400)
+          + (main_timeout.get('hours', 0) | float(0) * 3600)
+          + (main_timeout.get('minutes', 0) | float(0) * 60)
+          + (main_timeout.get('seconds', 0) | float(0))
+          + (main_timeout.get('milliseconds', 0) | float(0) / 1000) -%}
+    {%- set current = now() -%}
+    {%- set current_seconds = current.hour * 3600 + current.minute * 60 + current.second + current.microsecond / 1000000 -%}
+    {%- set ns = namespace(found=false, seconds=main_seconds) -%}
+    {%- if advanced_ranges_valid -%}
+      {%- for window in native_timeout_windows -%}
+        {%- if not ns.found and window.enabled -%}
+          {%- set start_parts = window.start.split(':') -%}
+          {%- set end_parts = window.end.split(':') -%}
+          {%- set start = start_parts[0] | float * 3600 + start_parts[1] | float * 60 + start_parts[2] | float -%}
+          {%- set end = end_parts[0] | float * 3600 + end_parts[1] | float * 60 + end_parts[2] | float -%}
+          {%- if start == end
+                or (start < end and start <= current_seconds <= end)
+                or (start > end and (current_seconds >= start or current_seconds <= end)) -%}
+            {%- set duration = window.duration -%}
+            {%- set ns.seconds =
+                  (duration.get('days', 0) | float(0) * 86400)
+                  + (duration.get('hours', 0) | float(0) * 3600)
+                  + (duration.get('minutes', 0) | float(0) * 60)
+                  + (duration.get('seconds', 0) | float(0))
+                  + (duration.get('milliseconds', 0) | float(0) / 1000) -%}
+            {%- set ns.found = true -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- for entry in advanced_alternate_timeouts.replace(' ', '').split(';') -%}
+        {%- if not ns.found and entry != '' -%}
+          {%- set fields = entry.split(',') -%}
+          {%- set boundaries = fields[0].split('-') -%}
+          {%- set start_parts = boundaries[0].split(':') -%}
+          {%- set end_parts = boundaries[1].split(':') -%}
+          {%- set start = start_parts[0] | float * 3600 + start_parts[1] | float * 60 + start_parts[2] | float -%}
+          {%- set end = end_parts[0] | float * 3600 + end_parts[1] | float * 60 + end_parts[2] | float -%}
+          {%- if start == end
+                or (start < end and start <= current_seconds <= end)
+                or (start > end and (current_seconds >= start or current_seconds <= end)) -%}
+            {%- set duration_parts = fields[1].split(':') -%}
+            {%- if duration_parts | count == 1 -%}
+              {%- set ns.seconds = duration_parts[0] | float -%}
+            {%- else -%}
+              {%- set ns.seconds = duration_parts[0] | float * 3600 + duration_parts[1] | float * 60 + duration_parts[2] | float -%}
+            {%- endif -%}
+            {%- set ns.found = true -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+    {{ ns.seconds }}
 
   off_target_entities: >-
     {{ configured_off_target_entities
@@ -557,6 +727,13 @@ conditions:
     value_template: "{{ available_trigger_entities | count > 0 }}"
 
 actions:
+  - alias: Validate advanced time ranges
+    if:
+      - condition: template
+        value_template: "{{ not advanced_ranges_valid }}"
+    then:
+      - stop: "Invalid advanced time range format: {{ advanced_ranges_error }}"
+        error: true
   - alias: Wait for active manual-off lockout
     if:
       - condition: template

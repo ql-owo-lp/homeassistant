@@ -220,6 +220,15 @@ class BlueprintUiTests(unittest.TestCase):
         self.assertIn("start-end range", advanced_description)
         self.assertIn("start-end,duration", advanced_description)
         self.assertIn("HH:MM:SS", advanced_description)
+        self.assertIn("semicolon", advanced_description.lower())
+        self.assertNotIn("per line", advanced_description.lower())
+        for input_name in (
+            "advanced_execution_ranges",
+            "advanced_alternate_timeouts",
+        ):
+            self.assertIn(
+                "semicolon", self.inputs[input_name]["description"].lower()
+            )
         self.assertIs(True, self.inputs["logbook_enabled"]["default"])
 
     def test_repeating_daily_slots_have_exact_shape_and_defaults(self):
@@ -302,7 +311,7 @@ class RuntimeStructureTests(unittest.TestCase):
         self.assertNotIn("for", immediate)
         self.assertEqual(
             "{{ manual_off_lockout_remaining_seconds }}",
-            self.document["actions"][0]["then"][0]["delay"]["seconds"],
+            self.document["actions"][1]["then"][0]["delay"]["seconds"],
         )
 
     def test_required_normalized_variables_are_present(self):
@@ -355,7 +364,10 @@ class RuntimeStructureTests(unittest.TestCase):
         for variable, input_name in expected_inputs.items():
             with self.subTest(variable=variable):
                 self.assertEqual({"!input": input_name}, variables[variable])
-        self.assertNotIn("split(',')", str(variables))
+        self.assertNotIn(
+            "split(',')",
+            str({variable: variables[variable] for variable in expected_inputs}),
+        )
 
     def test_gate_blocker_and_manual_inputs_are_exposed_as_variables(self):
         variables = self.document["variables"]
@@ -378,6 +390,61 @@ class RuntimeStructureTests(unittest.TestCase):
             with self.subTest(variable=variable):
                 self.assertEqual({"!input": input_name}, variables[variable])
 
+    def test_time_window_inputs_and_native_slots_are_exposed_structurally(self):
+        variables = self.document["variables"]
+        for input_name in (
+            "execution_schedule",
+            "advanced_execution_ranges",
+            "advanced_alternate_timeouts",
+            "main_timeout",
+        ):
+            with self.subTest(input=input_name):
+                self.assertEqual({"!input": input_name}, variables[input_name])
+
+        execution = variables["native_execution_windows"]
+        self.assertEqual(3, len(execution))
+        for slot, window in enumerate(execution, 1):
+            with self.subTest(execution_slot=slot):
+                self.assertEqual({"enabled", "start", "end"}, set(window))
+                for field in window:
+                    self.assertEqual(
+                        {"!input": f"execution_window_{slot}_{field}"},
+                        window[field],
+                    )
+
+        timeouts = variables["native_timeout_windows"]
+        self.assertEqual(3, len(timeouts))
+        for slot, window in enumerate(timeouts, 1):
+            with self.subTest(timeout_slot=slot):
+                self.assertEqual(
+                    {"enabled", "start", "end", "duration"}, set(window)
+                )
+                for field in window:
+                    self.assertEqual(
+                        {"!input": f"alternate_timeout_{slot}_{field}"},
+                        window[field],
+                    )
+
+    def test_time_decision_variables_are_present_in_dependency_order(self):
+        variables = list(self.document["variables"])
+        required = (
+            "advanced_ranges_valid",
+            "advanced_ranges_error",
+            "execution_window_configured",
+            "execution_allowed",
+            "resolved_timeout_seconds",
+        )
+        for variable in required:
+            self.assertIn(variable, variables)
+        self.assertLess(
+            variables.index("advanced_ranges_valid"),
+            variables.index("execution_allowed"),
+        )
+        self.assertLess(
+            variables.index("advanced_ranges_valid"),
+            variables.index("resolved_timeout_seconds"),
+        )
+
     def test_root_condition_requires_an_available_trigger(self):
         self.assertEqual(1, len(self.document["conditions"]))
         condition = self.document["conditions"][0]
@@ -385,9 +452,21 @@ class RuntimeStructureTests(unittest.TestCase):
         self.assertEqual("template", condition["condition"])
         self.assertIn("available_trigger_entities | count > 0", condition["value_template"])
 
-    def test_first_action_waits_for_the_active_manual_off_lockout(self):
-        self.assertEqual(1, len(self.document["actions"]))
-        action = self.document["actions"][0]
+    def test_validation_action_precedes_manual_off_lockout(self):
+        self.assertEqual(2, len(self.document["actions"]))
+        validation, action = self.document["actions"]
+        self.assertEqual("Validate advanced time ranges", validation["alias"])
+        self.assertEqual(
+            [{
+                "condition": "template",
+                "value_template": "{{ not advanced_ranges_valid }}",
+            }],
+            validation["if"],
+        )
+        self.assertEqual(1, len(validation["then"]))
+        stop = validation["then"][0]
+        self.assertIs(True, stop["error"])
+        self.assertIn("advanced_ranges_error", stop["stop"])
         self.assertEqual("Wait for active manual-off lockout", action["alias"])
         self.assertEqual(
             [
@@ -414,7 +493,7 @@ class RuntimeStructureTests(unittest.TestCase):
             ["automation_reloaded", "home_assistant_started"],
             [trigger["id"] for trigger in self.document["triggers"][:2]],
         )
-        self.assertNotIn("trigger", str(self.document["actions"][0]))
+        self.assertNotIn("trigger", str(self.document["actions"][1]))
 
 
 class RuntimeTemplateBehaviorTests(unittest.TestCase):
@@ -936,6 +1015,320 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
                 states=self.States({"light.main": state}),
                 now=lambda: now,
                 as_timestamp=self.as_timestamp,
+            ),
+        )
+
+    def test_advanced_range_validation_accepts_supported_formats(self):
+        cases = (
+            ("", ""),
+            (" 9:00:00 - 17:00:00 ; ;23:00:00-1:00:00.5 ", ""),
+            ("", "9:00:00-17:00:00,1.25;23:00:00-1:00:00,27:02:03.5"),
+            ("1:02:03.25-1:02:03.25", "0:00:00-23:59:59.9,0"),
+        )
+        for execution, alternate in cases:
+            with self.subTest(execution=execution, alternate=alternate):
+                self.assertTrue(
+                    self.render(
+                        "advanced_ranges_valid",
+                        advanced_execution_ranges=execution,
+                        advanced_alternate_timeouts=alternate,
+                    )
+                )
+
+    def test_advanced_range_validation_rejects_malformed_fields_times_and_durations(self):
+        invalid_cases = (
+            ("09:00:00", ""),
+            ("09:00:00-10:00:00-extra", ""),
+            ("24:00:00-10:00:00", ""),
+            ("09:60:00-10:00:00", ""),
+            ("09:00-10:00:00", ""),
+            ("09:00:00-10:00:00junk", ""),
+            ("", "09:00:00-10:00:00"),
+            ("", "09:00:00-10:00:00,1,2"),
+            ("", "09:00:00-10:00:00,-1"),
+            ("", "09:00:00-10:00:00,1e3"),
+            ("", "09:00:00-10:00:00,1:60:00"),
+            ("", "09:00:00-10:00:00,1:00:60"),
+        )
+        for execution, alternate in invalid_cases:
+            with self.subTest(execution=execution, alternate=alternate):
+                self.assertFalse(
+                    self.render(
+                        "advanced_ranges_valid",
+                        advanced_execution_ranges=execution,
+                        advanced_alternate_timeouts=alternate,
+                    )
+                )
+
+    def test_advanced_range_validation_error_identifies_the_invalid_input(self):
+        self.assertIn(
+            "execution",
+            self.render(
+                "advanced_ranges_error",
+                advanced_execution_ranges="bad",
+                advanced_alternate_timeouts="",
+            ).lower(),
+        )
+        self.assertIn(
+            "alternate timeout",
+            self.render(
+                "advanced_ranges_error",
+                advanced_execution_ranges="",
+                advanced_alternate_timeouts="bad",
+            ).lower(),
+        )
+
+    def test_execution_window_configuration_detects_each_source(self):
+        base = {
+            "execution_schedule": "",
+            "native_execution_windows": [
+                {"enabled": False, "start": "00:00:00", "end": "00:00:00"}
+            ] * 3,
+            "advanced_execution_ranges": " ; ; ",
+        }
+        self.assertFalse(self.render("execution_window_configured", **base))
+        for change in (
+            {"execution_schedule": "schedule.work"},
+            {"native_execution_windows": [
+                {"enabled": True, "start": "00:00:00", "end": "00:00:00"}
+            ] + base["native_execution_windows"][1:]},
+            {"advanced_execution_ranges": "; 9:00:00-10:00:00 ;"},
+        ):
+            with self.subTest(change=change):
+                self.assertTrue(
+                    self.render("execution_window_configured", **(base | change))
+                )
+
+    def test_execution_allowed_without_config_and_schedule_or_semantics(self):
+        now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+        empty_windows = [
+            {"enabled": False, "start": "00:00:00", "end": "00:00:00"}
+        ] * 3
+        base = {
+            "advanced_ranges_valid": True,
+            "execution_schedule": "",
+            "native_execution_windows": empty_windows,
+            "advanced_execution_ranges": "",
+            "states": self.states_for({}),
+            "now": lambda: now,
+        }
+        self.assertTrue(
+            self.render("execution_allowed", execution_window_configured=False, **base)
+        )
+        schedule = base | {
+            "execution_window_configured": True,
+            "execution_schedule": "schedule.work",
+        }
+        self.assertFalse(self.render("execution_allowed", **schedule))
+        self.assertTrue(
+            self.render(
+                "execution_allowed",
+                **(schedule | {"states": self.states_for({"schedule.work": "on"})}),
+            )
+        )
+        self.assertTrue(
+            self.render(
+                "execution_allowed",
+                **(schedule | {
+                    "states": self.states_for({"schedule.work": "unavailable"}),
+                    "advanced_execution_ranges": "11:00:00-13:00:00",
+                }),
+            )
+        )
+
+    def test_native_execution_windows_use_inclusive_daily_overnight_and_all_day_rules(self):
+        cases = (
+            ("09:00:00", "17:00:00", (9, 0, 0), True),
+            ("09:00:00", "17:00:00", (17, 0, 0), True),
+            ("09:00:00", "17:00:00", (8, 59, 59), False),
+            ("22:00:00", "02:00:00", (23, 0, 0), True),
+            ("22:00:00", "02:00:00", (1, 0, 0), True),
+            ("22:00:00", "02:00:00", (12, 0, 0), False),
+            ("12:34:56", "12:34:56", (3, 0, 0), True),
+        )
+        for start, end, clock, expected in cases:
+            with self.subTest(start=start, end=end, clock=clock):
+                now = datetime(2026, 7, 11, *clock, tzinfo=timezone.utc)
+                self.assertIs(
+                    expected,
+                    self.render(
+                        "execution_allowed",
+                        advanced_ranges_valid=True,
+                        execution_window_configured=True,
+                        execution_schedule="",
+                        native_execution_windows=[
+                            {"enabled": True, "start": start, "end": end}
+                        ],
+                        advanced_execution_ranges="",
+                        states=self.states_for({}),
+                        now=lambda now=now: now,
+                    ),
+                )
+
+    def test_advanced_execution_ranges_are_unlimited_normalized_and_or_together(self):
+        ranges = "; 1:00:00-2:00:00 ; ;3:00:00-4:00:00;5:00:00-6:00:00;7:00:00-8:00:00"
+        for hour, expected in ((1, True), (4, True), (7, True), (9, False)):
+            with self.subTest(hour=hour):
+                now = datetime(2026, 7, 11, hour, tzinfo=timezone.utc)
+                self.assertIs(
+                    expected,
+                    self.render(
+                        "execution_allowed",
+                        advanced_ranges_valid=True,
+                        execution_window_configured=True,
+                        execution_schedule="",
+                        native_execution_windows=[],
+                        advanced_execution_ranges=ranges,
+                        states=self.states_for({}),
+                        now=lambda now=now: now,
+                    ),
+                )
+
+    def test_invalid_advanced_ranges_fail_closed_without_parsing(self):
+        now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+        self.assertFalse(
+            self.render(
+                "execution_allowed",
+                advanced_ranges_valid=False,
+                execution_window_configured=True,
+                execution_schedule="",
+                native_execution_windows=[],
+                advanced_execution_ranges="this-would-throw-if-parsed",
+                states=self.states_for({}),
+                now=lambda: now,
+            )
+        )
+        self.assertEqual(
+            30,
+            self.render(
+                "resolved_timeout_seconds",
+                advanced_ranges_valid=False,
+                native_timeout_windows=[],
+                advanced_alternate_timeouts="also-invalid",
+                main_timeout={"seconds": 30},
+                now=lambda: now,
+            ),
+        )
+
+    def test_timeout_resolution_prioritizes_native_then_advanced_then_main(self):
+        now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+        native = [
+            {
+                "enabled": True,
+                "start": "00:00:00",
+                "end": "00:00:00",
+                "duration": {"seconds": 1.5, "milliseconds": 250},
+            },
+            {
+                "enabled": True,
+                "start": "00:00:00",
+                "end": "00:00:00",
+                "duration": {"seconds": 99},
+            },
+        ]
+        base = {
+            "advanced_ranges_valid": True,
+            "native_timeout_windows": native,
+            "advanced_alternate_timeouts": "0:00:00-0:00:00,2.5;0:00:00-0:00:00,3",
+            "main_timeout": {"days": 1, "hours": 2, "minutes": 3, "seconds": 4},
+            "now": lambda: now,
+        }
+        self.assertEqual(1.75, self.render("resolved_timeout_seconds", **base))
+        self.assertEqual(
+            2.5,
+            self.render(
+                "resolved_timeout_seconds",
+                **(base | {"native_timeout_windows": []}),
+            ),
+        )
+        self.assertEqual(
+            93784,
+            self.render(
+                "resolved_timeout_seconds",
+                **(base | {
+                    "native_timeout_windows": [],
+                    "advanced_alternate_timeouts": "11:00:00-11:30:00,2",
+                }),
+            ),
+        )
+
+    def test_timeout_ranges_support_order_overnight_equal_and_hms_fraction(self):
+        cases = (
+            ("11:00:00-13:00:00,5;11:30:00-12:30:00,9", 12, 5),
+            ("22:00:00-2:00:00,1:02:03.5", 1, 3723.5),
+            ("7:00:00-7:00:00,0.125", 18, 0.125),
+        )
+        for ranges, hour, expected in cases:
+            with self.subTest(ranges=ranges):
+                now = datetime(2026, 7, 11, hour, tzinfo=timezone.utc)
+                self.assertEqual(
+                    expected,
+                    self.render(
+                        "resolved_timeout_seconds",
+                        advanced_ranges_valid=True,
+                        native_timeout_windows=[],
+                        advanced_alternate_timeouts=ranges,
+                        main_timeout={"seconds": 30},
+                        now=lambda now=now: now,
+                    ),
+                )
+
+    def test_native_timeout_windows_use_boundaries_overnight_and_first_match(self):
+        cases = (
+            ("09:00:00", "17:00:00", (9, 0, 0), 5),
+            ("09:00:00", "17:00:00", (17, 0, 0), 5),
+            ("09:00:00", "17:00:00", (8, 59, 59), 30),
+            ("22:00:00", "02:00:00", (23, 0, 0), 5),
+            ("22:00:00", "02:00:00", (1, 0, 0), 5),
+            ("22:00:00", "02:00:00", (12, 0, 0), 30),
+            ("12:34:56", "12:34:56", (3, 0, 0), 5),
+        )
+        for start, end, clock, expected in cases:
+            with self.subTest(start=start, end=end, clock=clock):
+                now = datetime(2026, 7, 11, *clock, tzinfo=timezone.utc)
+                self.assertEqual(
+                    expected,
+                    self.render(
+                        "resolved_timeout_seconds",
+                        advanced_ranges_valid=True,
+                        native_timeout_windows=[
+                            {
+                                "enabled": True,
+                                "start": start,
+                                "end": end,
+                                "duration": {"seconds": 5},
+                            },
+                            {
+                                "enabled": expected == 5,
+                                "start": "00:00:00",
+                                "end": "00:00:00",
+                                "duration": {"seconds": 10},
+                            },
+                        ],
+                        advanced_alternate_timeouts="",
+                        main_timeout={"seconds": 30},
+                        now=lambda now=now: now,
+                    ),
+                )
+
+    def test_nonmatching_native_timeout_falls_through_to_advanced(self):
+        now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
+        self.assertEqual(
+            7,
+            self.render(
+                "resolved_timeout_seconds",
+                advanced_ranges_valid=True,
+                native_timeout_windows=[
+                    {
+                        "enabled": True,
+                        "start": "13:00:00",
+                        "end": "14:00:00",
+                        "duration": {"seconds": 5},
+                    }
+                ],
+                advanced_alternate_timeouts="11:00:00-13:00:00,7",
+                main_timeout={"seconds": 30},
+                now=lambda: now,
             ),
         )
 
