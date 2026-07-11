@@ -370,6 +370,12 @@ blueprint:
 mode: restart
 max_exceeded: silent
 
+trigger_variables:
+  target_entities: !input target_entities
+  manual_off_enabled: !input manual_off_enabled
+  manual_off_duration: !input manual_off_duration
+  manual_off_state_pattern: !input manual_off_state_pattern
+
 variables:
   trigger_entities: !input trigger_entities
   target_entities: !input target_entities
@@ -409,7 +415,7 @@ variables:
   activation_entities: >-
     {%- set ns = namespace(entities=[]) -%}
     {%- for entity_id in available_trigger_entities -%}
-      {%- if states(entity_id) is match('^(' ~ activation_state_pattern ~ ')$', ignorecase=true) -%}
+      {%- if states(entity_id) is match('^(?:' ~ activation_state_pattern ~ ')\\Z', ignorecase=true) -%}
         {%- set ns.entities = ns.entities + [entity_id] -%}
       {%- endif -%}
     {%- endfor -%}
@@ -419,7 +425,7 @@ variables:
     {%- set ns = namespace(entities=[]) -%}
     {%- if deactivation_state_pattern | trim != '' -%}
       {%- for entity_id in available_trigger_entities -%}
-        {%- if states(entity_id) is match('^(' ~ deactivation_state_pattern ~ ')$', ignorecase=true) -%}
+        {%- if states(entity_id) is match('^(?:' ~ deactivation_state_pattern ~ ')\\Z', ignorecase=true) -%}
           {%- set ns.entities = ns.entities + [entity_id] -%}
         {%- endif -%}
       {%- endfor -%}
@@ -431,7 +437,7 @@ variables:
   active_target_entities: >-
     {%- set ns = namespace(entities=[]) -%}
     {%- for entity_id in target_entities -%}
-      {%- if states(entity_id) is match('^(' ~ target_state_pattern ~ ')$', ignorecase=true) -%}
+      {%- if states(entity_id) is match('^(?:' ~ target_state_pattern ~ ')\\Z', ignorecase=true) -%}
         {%- set ns.entities = ns.entities + [entity_id] -%}
       {%- endif -%}
     {%- endfor -%}
@@ -486,18 +492,19 @@ variables:
   activation_blocked: >-
     {{ activation_blocker_entity | trim != ''
        and activation_blocker_state_pattern | trim != ''
-       and states(activation_blocker_entity) is match('^(' ~ activation_blocker_state_pattern ~ ')$', ignorecase=true) }}
+       and states(activation_blocker_entity) is match('^(?:' ~ activation_blocker_state_pattern ~ ')\\Z', ignorecase=true) }}
 
   deactivation_blocked: >-
     {{ deactivation_blocker_entity | trim != ''
        and deactivation_blocker_state_pattern | trim != ''
-       and states(deactivation_blocker_entity) is match('^(' ~ deactivation_blocker_state_pattern ~ ')$', ignorecase=true) }}
+       and states(deactivation_blocker_entity) is match('^(?:' ~ deactivation_blocker_state_pattern ~ ')\\Z', ignorecase=true) }}
 
   manual_off_duration_seconds: >-
-    {{ (manual_off_duration.get('days', 0) | int(0) * 86400)
-       + (manual_off_duration.get('hours', 0) | int(0) * 3600)
-       + (manual_off_duration.get('minutes', 0) | int(0) * 60)
-       + (manual_off_duration.get('seconds', 0) | int(0)) }}
+    {{ (manual_off_duration.get('days', 0) | float(0) * 86400)
+       + (manual_off_duration.get('hours', 0) | float(0) * 3600)
+       + (manual_off_duration.get('minutes', 0) | float(0) * 60)
+       + (manual_off_duration.get('seconds', 0) | float(0))
+       + (manual_off_duration.get('milliseconds', 0) | float(0) / 1000) }}
 
   manual_off_lockout_active: >-
     {%- set ns = namespace(active=false) -%}
@@ -508,7 +515,7 @@ variables:
       {%- for entity_id in target_entities -%}
         {%- set state_object = states[entity_id] -%}
         {%- if state_object is not none
-              and states(entity_id) is match('^(' ~ manual_off_state_pattern ~ ')$', ignorecase=true) -%}
+              and states(entity_id) is match('^(?:' ~ manual_off_state_pattern ~ ')\\Z', ignorecase=true) -%}
           {%- set changed_timestamp = as_timestamp(state_object.last_changed, none) -%}
           {%- if changed_timestamp is not none -%}
             {%- set age = current_timestamp - changed_timestamp -%}
@@ -539,6 +546,37 @@ triggers:
   - trigger: state
     entity_id: !input target_entities
     for: !input manual_off_duration
+    id: manual_lockout_expired
+  - trigger: template
+    value_template: >-
+      {%- set duration =
+            (manual_off_duration.get('days', 0) | float(0) * 86400)
+            + (manual_off_duration.get('hours', 0) | float(0) * 3600)
+            + (manual_off_duration.get('minutes', 0) | float(0) * 60)
+            + (manual_off_duration.get('seconds', 0) | float(0))
+            + (manual_off_duration.get('milliseconds', 0) | float(0) / 1000) -%}
+      {%- set ns = namespace(expired=false) -%}
+      {%- if manual_off_enabled
+            and duration > 0
+            and manual_off_state_pattern | trim != '' -%}
+        {%- set current_timestamp = as_timestamp(now(), none) -%}
+        {%- if current_timestamp is not none -%}
+          {%- for entity_id in target_entities -%}
+            {%- set state_object = states[entity_id] -%}
+            {%- if state_object is not none
+                  and states(entity_id) is match('^(?:' ~ manual_off_state_pattern ~ ')\\Z', ignorecase=true) -%}
+              {%- set changed_timestamp = as_timestamp(state_object.last_changed, none) -%}
+              {%- if changed_timestamp is not none -%}
+                {%- set age = current_timestamp - changed_timestamp -%}
+                {%- if age >= duration and age < duration + 120 -%}
+                  {%- set ns.expired = true -%}
+                {%- endif -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+        {%- endif -%}
+      {%- endif -%}
+      {{ ns.expired }}
     id: manual_lockout_expired
 
 conditions:
