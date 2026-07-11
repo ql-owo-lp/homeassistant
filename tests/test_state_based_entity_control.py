@@ -37,6 +37,17 @@ class BlueprintUiTests(unittest.TestCase):
         }
 
     def test_blueprint_metadata_and_placeholder_runtime(self):
+        self.assertEqual(
+            {
+                "blueprint",
+                "mode",
+                "variables",
+                "triggers",
+                "conditions",
+                "actions",
+            },
+            set(self.document),
+        )
         self.assertEqual("State Based Entity Control v2", self.blueprint["name"])
         self.assertEqual("automation", self.blueprint["domain"])
         self.assertEqual("2026.7.0", self.blueprint["homeassistant"]["min_version"])
@@ -63,6 +74,10 @@ class BlueprintUiTests(unittest.TestCase):
         self.assertEqual(expected_sections, list(self.sections))
         for section_id, section in self.sections.items():
             with self.subTest(section=section_id):
+                if section_id == "core":
+                    self.assertNotIn("collapsed", section)
+                else:
+                    self.assertIs(True, section.get("collapsed"))
                 self.assertTrue(section["name"])
                 self.assertTrue(section["icon"])
                 self.assertTrue(section["input"])
@@ -98,6 +113,26 @@ class BlueprintUiTests(unittest.TestCase):
         for input_id, selector_type in expected_selectors.items():
             with self.subTest(input=input_id):
                 self.assertIn(selector_type, self.inputs[input_id]["selector"])
+
+    def test_entity_selectors_have_required_cardinality_and_filters(self):
+        for input_id in (
+            "trigger_entities",
+            "target_entities",
+            "off_target_entities",
+        ):
+            with self.subTest(input=input_id):
+                self.assertIs(
+                    True,
+                    self.inputs[input_id]["selector"]["entity"]["multiple"],
+                )
+        self.assertEqual(
+            [{"domain": "sensor", "device_class": "illuminance"}],
+            self.inputs["illuminance_sensor"]["selector"]["entity"]["filter"],
+        )
+        self.assertEqual(
+            [{"domain": "schedule"}],
+            self.inputs["execution_schedule"]["selector"]["entity"]["filter"],
+        )
 
     def test_state_and_advanced_patterns_use_text_selectors(self):
         text_inputs = [
@@ -156,6 +191,32 @@ class BlueprintUiTests(unittest.TestCase):
         light_mode = self.inputs["light_gate_mode"]["selector"]["select"]
         self.assertEqual(["any", "all"], light_mode["options"])
         self.assertEqual("dropdown", light_mode["mode"])
+
+    def test_optional_feature_defaults_and_advanced_format_documentation(self):
+        self.assertEqual([], self.inputs["activation_actions"]["default"])
+        self.assertEqual([], self.inputs["deactivation_actions"]["default"])
+        self.assertEqual("", self.inputs["activation_blocker_entity"]["default"])
+        self.assertEqual(
+            "on", self.inputs["activation_blocker_state_pattern"]["default"]
+        )
+        self.assertEqual("", self.inputs["deactivation_blocker_entity"]["default"])
+        self.assertEqual(
+            "on", self.inputs["deactivation_blocker_state_pattern"]["default"]
+        )
+        self.assertIs(False, self.inputs["manual_off_enabled"]["default"])
+        self.assertEqual(
+            {"hours": 0, "minutes": 30, "seconds": 0},
+            self.inputs["manual_off_duration"]["default"],
+        )
+        self.assertEqual("off", self.inputs["manual_off_state_pattern"]["default"])
+        self.assertEqual("", self.inputs["execution_schedule"]["default"])
+        self.assertEqual("", self.inputs["advanced_execution_ranges"]["default"])
+        self.assertEqual("", self.inputs["advanced_alternate_timeouts"]["default"])
+        advanced_description = self.sections["advanced"]["description"]
+        self.assertIn("start-end range", advanced_description)
+        self.assertIn("start-end,duration", advanced_description)
+        self.assertIn("HH:MM:SS", advanced_description)
+        self.assertIs(True, self.inputs["logbook_enabled"]["default"])
 
     def test_repeating_daily_slots_have_exact_shape_and_defaults(self):
         execution_inputs = self.sections["execution_windows"]["input"]
