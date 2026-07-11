@@ -49,7 +49,6 @@ class BlueprintUiTests(unittest.TestCase):
                 "mode",
                 "max_exceeded",
                 "variables",
-                "trigger_variables",
                 "triggers",
                 "conditions",
                 "actions",
@@ -274,12 +273,11 @@ class RuntimeStructureTests(unittest.TestCase):
                 "trigger_entity_changed",
                 "target_state_stable",
                 "manual_lockout_expired",
-                "manual_lockout_expired",
             ],
             [trigger["id"] for trigger in triggers],
         )
         self.assertEqual(
-            ["event", "homeassistant", "state", "state", "state", "template"],
+            ["event", "homeassistant", "state", "state", "state"],
             [trigger["trigger"] for trigger in triggers],
         )
         self.assertEqual("automation_reloaded", triggers[0]["event_type"])
@@ -289,20 +287,6 @@ class RuntimeStructureTests(unittest.TestCase):
         self.assertEqual({"seconds": 3}, triggers[3]["for"])
         self.assertEqual({"!input": "target_entities"}, triggers[4]["entity_id"])
         self.assertEqual({"!input": "manual_off_duration"}, triggers[4]["for"])
-        self.assertTrue(triggers[5]["value_template"].strip())
-
-    def test_manual_lockout_recovery_inputs_are_exposed_to_triggers(self):
-        self.assertEqual(
-            {
-                "target_entities": {"!input": "target_entities"},
-                "manual_off_enabled": {"!input": "manual_off_enabled"},
-                "manual_off_duration": {"!input": "manual_off_duration"},
-                "manual_off_state_pattern": {
-                    "!input": "manual_off_state_pattern"
-                },
-            },
-            self.document["trigger_variables"],
-        )
 
     def test_required_normalized_variables_are_present(self):
         required = {
@@ -323,6 +307,7 @@ class RuntimeStructureTests(unittest.TestCase):
             "activation_blocked",
             "deactivation_blocked",
             "manual_off_duration_seconds",
+            "manual_off_lockout_remaining_seconds",
             "manual_off_lockout_active",
         }
         self.assertTrue(required <= set(self.document["variables"]))
@@ -371,8 +356,36 @@ class RuntimeStructureTests(unittest.TestCase):
         self.assertEqual("template", condition["condition"])
         self.assertIn("available_trigger_entities | count > 0", condition["value_template"])
 
-    def test_actions_are_reserved_for_later_runtime_tasks(self):
-        self.assertEqual([], self.document["actions"])
+    def test_first_action_waits_for_the_active_manual_off_lockout(self):
+        self.assertEqual(1, len(self.document["actions"]))
+        action = self.document["actions"][0]
+        self.assertEqual("Wait for active manual-off lockout", action["alias"])
+        self.assertEqual(
+            [
+                {
+                    "condition": "template",
+                    "value_template": "{{ manual_off_lockout_active }}",
+                }
+            ],
+            action["if"],
+        )
+        self.assertEqual(
+            [
+                {
+                    "delay": {
+                        "seconds": "{{ manual_off_lockout_remaining_seconds }}"
+                    }
+                }
+            ],
+            action["then"],
+        )
+
+    def test_startup_and_reload_sources_run_the_same_lockout_wait(self):
+        self.assertEqual(
+            ["automation_reloaded", "home_assistant_started"],
+            [trigger["id"] for trigger in self.document["triggers"][:2]],
+        )
+        self.assertNotIn("trigger", str(self.document["actions"][0]))
 
 
 class RuntimeTemplateBehaviorTests(unittest.TestCase):
@@ -391,9 +404,6 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
 
     def render(self, variable, **context):
         return self.environment.from_string(self.variables[variable]).render(**context)
-
-    def render_template(self, template, **context):
-        return self.environment.from_string(template).render(**context)
 
     @staticmethod
     def states_for(entity_states):
@@ -779,73 +789,80 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
             ),
         )
 
-    def test_subsecond_manual_off_duration_keeps_lockout_active(self):
+    def test_manual_off_lockout_remaining_seconds_for_single_target(self):
         now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
         state = SimpleNamespace(
-            state="off", last_changed=now - timedelta(seconds=0.25)
+            state="off", last_changed=now - timedelta(seconds=10)
         )
-        self.assertTrue(
+        self.assertEqual(
+            20,
             self.render(
-                "manual_off_lockout_active",
+                "manual_off_lockout_remaining_seconds",
                 manual_off_enabled=True,
-                manual_off_duration_seconds=0.5,
+                manual_off_duration_seconds=30,
                 manual_off_state_pattern="off",
                 target_entities=["light.main"],
                 states=self.States({"light.main": state}),
                 now=lambda: now,
                 as_timestamp=self.as_timestamp,
-            )
+            ),
         )
 
-    def test_manual_off_lockout_requires_enabled_positive_duration_and_matching_state(self):
+    def test_manual_off_lockout_uses_max_remainder_for_staggered_targets(self):
         now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
-        state = SimpleNamespace(state="off", last_changed=now - timedelta(seconds=10))
-        context = {
-            "target_entities": ["light.main"],
-            "manual_off_state_pattern": "off",
-            "states": self.States({"light.main": state}),
-            "now": lambda: now,
-            "as_timestamp": self.as_timestamp,
-        }
-        self.assertFalse(
-            self.render(
-                "manual_off_lockout_active",
-                manual_off_enabled=False,
-                manual_off_duration_seconds=30,
-                **context,
-            )
+        states = self.States(
+            {
+                "light.first": SimpleNamespace(
+                    state="off", last_changed=now - timedelta(seconds=20)
+                ),
+                "light.second": SimpleNamespace(
+                    state="OFF", last_changed=now - timedelta(seconds=5)
+                ),
+                "light.expired": SimpleNamespace(
+                    state="off", last_changed=now - timedelta(seconds=40)
+                ),
+            }
         )
-        self.assertFalse(
+        self.assertEqual(
+            25,
             self.render(
-                "manual_off_lockout_active",
-                manual_off_enabled=True,
-                manual_off_duration_seconds=0,
-                **context,
-            )
-        )
-        state.state = "on"
-        self.assertFalse(
-            self.render(
-                "manual_off_lockout_active",
+                "manual_off_lockout_remaining_seconds",
                 manual_off_enabled=True,
                 manual_off_duration_seconds=30,
-                **context,
-            )
+                manual_off_state_pattern="off",
+                target_entities=["light.first", "light.second", "light.expired"],
+                states=states,
+                now=lambda: now,
+                as_timestamp=self.as_timestamp,
+            ),
         )
 
-    def test_manual_off_lockout_is_strictly_younger_than_duration(self):
+    def test_manual_off_lockout_remainder_is_zero_when_inactive_or_expired(self):
         now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
-        for age, expected in ((29.9, True), (30, False), (31, False), (-1, False)):
-            with self.subTest(age=age):
+        for enabled, duration, state_value, age in (
+            (False, 30, "off", 10),
+            (True, 0, "off", 0),
+            (True, 30, "on", 10),
+            (True, 30, "off", 30),
+            (True, 30, "off", 31),
+            (True, 30, "off", -1),
+        ):
+            with self.subTest(
+                enabled=enabled,
+                duration=duration,
+                state=state_value,
+                age=age,
+            ):
                 state = SimpleNamespace(
-                    state="OFF", last_changed=now - timedelta(seconds=age)
+                    state=state_value,
+                    last_changed=now - timedelta(seconds=age),
                 )
-                self.assertIs(
-                    expected,
+                self.assertEqual(
+                    0,
                     self.render(
-                        "manual_off_lockout_active",
-                        manual_off_enabled=True,
-                        manual_off_duration_seconds=30,
+                        "manual_off_lockout_remaining_seconds",
+                        manual_off_enabled=enabled,
+                        manual_off_duration_seconds=duration,
                         manual_off_state_pattern="off",
                         target_entities=["light.main"],
                         states=self.States({"light.main": state}),
@@ -854,31 +871,36 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
                     ),
                 )
 
-    def test_manual_off_lockout_uses_any_matching_target(self):
+    def test_manual_off_lockout_remainder_preserves_fractional_precision(self):
         now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
-        states = self.States(
-            {
-                "light.old": SimpleNamespace(
-                    state="off", last_changed=now - timedelta(minutes=10)
-                ),
-                "light.recent": SimpleNamespace(
-                    state="off", last_changed=now - timedelta(seconds=10)
-                ),
-                "light.on": SimpleNamespace(
-                    state="on", last_changed=now - timedelta(seconds=5)
-                ),
-            }
+        state = SimpleNamespace(
+            state="off", last_changed=now - timedelta(seconds=0.25)
+        )
+        self.assertEqual(
+            1.5,
+            self.render(
+                "manual_off_lockout_remaining_seconds",
+                manual_off_enabled=True,
+                manual_off_duration_seconds=1.75,
+                manual_off_state_pattern="off",
+                target_entities=["light.main"],
+                states=self.States({"light.main": state}),
+                now=lambda: now,
+                as_timestamp=self.as_timestamp,
+            ),
+        )
+
+    def test_manual_off_lockout_active_is_derived_from_positive_remainder(self):
+        self.assertFalse(
+            self.render(
+                "manual_off_lockout_active",
+                manual_off_lockout_remaining_seconds=0,
+            )
         )
         self.assertTrue(
             self.render(
                 "manual_off_lockout_active",
-                manual_off_enabled=True,
-                manual_off_duration_seconds=30,
-                manual_off_state_pattern="off",
-                target_entities=["light.old", "light.on", "light.recent"],
-                states=states,
-                now=lambda: now,
-                as_timestamp=self.as_timestamp,
+                manual_off_lockout_remaining_seconds=0.001,
             )
         )
 
@@ -898,7 +920,7 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
                 self.assertIs(
                     expected,
                     self.render(
-                        "manual_off_lockout_active",
+                        "manual_off_lockout_remaining_seconds",
                         manual_off_enabled=True,
                         manual_off_duration_seconds=30,
                         manual_off_state_pattern=pattern,
@@ -907,69 +929,15 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
                         now=lambda: now,
                         as_timestamp=self.as_timestamp,
                     )
-                )
-
-    def test_manual_lockout_recovery_template_uses_a_bounded_expiry_window(self):
-        template = next(
-            trigger["value_template"]
-            for trigger in self.document["triggers"]
-            if trigger["trigger"] == "template"
-        )
-        now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
-        for age, expected in ((29.9, False), (30, True), (149.9, True), (150, False)):
-            with self.subTest(age=age):
-                state = SimpleNamespace(
-                    state="off", last_changed=now - timedelta(seconds=age)
-                )
-                self.assertIs(
-                    expected,
-                    self.render_template(
-                        template,
-                        manual_off_enabled=True,
-                        manual_off_duration={"seconds": 30},
-                        manual_off_state_pattern="off",
-                        target_entities=["light.main"],
-                        states=self.States({"light.main": state}),
-                        now=lambda: now,
-                        as_timestamp=self.as_timestamp,
-                    ),
-                )
-
-    def test_manual_lockout_recovery_template_rejects_disabled_or_nonmatching(self):
-        template = next(
-            trigger["value_template"]
-            for trigger in self.document["triggers"]
-            if trigger["trigger"] == "template"
-        )
-        now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
-        for enabled, state_value, duration in (
-            (False, "off", {"seconds": 30}),
-            (True, "on", {"seconds": 30}),
-            (True, "off", {"seconds": 0}),
-        ):
-            with self.subTest(enabled=enabled, state=state_value, duration=duration):
-                state = SimpleNamespace(
-                    state=state_value,
-                    last_changed=now - timedelta(seconds=40),
-                )
-                self.assertFalse(
-                    self.render_template(
-                        template,
-                        manual_off_enabled=enabled,
-                        manual_off_duration=duration,
-                        manual_off_state_pattern="off",
-                        target_entities=["light.main"],
-                        states=self.States({"light.main": state}),
-                        now=lambda: now,
-                        as_timestamp=self.as_timestamp,
-                    )
+                    > 0,
                 )
 
     def test_manual_off_lockout_safely_ignores_missing_target_state(self):
         now = datetime(2026, 7, 11, 12, tzinfo=timezone.utc)
-        self.assertFalse(
+        self.assertEqual(
+            0,
             self.render(
-                "manual_off_lockout_active",
+                "manual_off_lockout_remaining_seconds",
                 manual_off_enabled=True,
                 manual_off_duration_seconds=30,
                 manual_off_state_pattern="off",
