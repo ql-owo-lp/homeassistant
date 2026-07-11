@@ -368,7 +368,97 @@ blueprint:
             boolean: {}
 
 mode: restart
-variables: {}
-triggers: []
-conditions: []
+max_exceeded: silent
+
+variables:
+  trigger_entities: !input trigger_entities
+  target_entities: !input target_entities
+  configured_off_target_entities: !input off_target_entities
+  activation_state_pattern: !input activation_state_pattern
+  deactivation_state_pattern: !input deactivation_state_pattern
+  target_state_pattern: !input target_state_pattern
+  target_state_tracking: !input target_state_tracking
+
+  off_target_entities: >-
+    {{ configured_off_target_entities
+       if configured_off_target_entities | count > 0
+       else target_entities }}
+
+  available_trigger_entities: >-
+    {%- set ns = namespace(entities=[]) -%}
+    {%- for entity_id in trigger_entities -%}
+      {%- if states(entity_id) not in ['unknown', 'unavailable'] -%}
+        {%- set ns.entities = ns.entities + [entity_id] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ ns.entities }}
+
+  activation_entities: >-
+    {%- set ns = namespace(entities=[]) -%}
+    {%- for entity_id in available_trigger_entities -%}
+      {%- if states(entity_id) is match('^(' ~ activation_state_pattern ~ ')$', ignorecase=true) -%}
+        {%- set ns.entities = ns.entities + [entity_id] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ ns.entities }}
+
+  deactivation_entities: >-
+    {%- set ns = namespace(entities=[]) -%}
+    {%- if deactivation_state_pattern | trim != '' -%}
+      {%- for entity_id in available_trigger_entities -%}
+        {%- if states(entity_id) is match('^(' ~ deactivation_state_pattern ~ ')$', ignorecase=true) -%}
+          {%- set ns.entities = ns.entities + [entity_id] -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- elif activation_entities | count == 0 -%}
+      {%- set ns.entities = available_trigger_entities -%}
+    {%- endif -%}
+    {{ ns.entities }}
+
+  active_target_entities: >-
+    {%- set ns = namespace(entities=[]) -%}
+    {%- for entity_id in target_entities -%}
+      {%- if states(entity_id) is match('^(' ~ target_state_pattern ~ ')$', ignorecase=true) -%}
+        {%- set ns.entities = ns.entities + [entity_id] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ ns.entities }}
+
+  effective_target_state_tracking: >-
+    {%- set ns = namespace(has_stateless_target=false) -%}
+    {%- for entity_id in target_entities -%}
+      {%- if entity_id.split('.', 1)[0] in ['scene', 'script'] -%}
+        {%- set ns.has_stateless_target = true -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ target_state_tracking and not ns.has_stateless_target }}
+
+  trigger_source_allows_activation: >-
+    {{ trigger is not defined or trigger.id != 'target_state_stable' }}
+
+triggers:
+  - trigger: event
+    event_type: automation_reloaded
+    id: automation_reloaded
+  - trigger: homeassistant
+    event: start
+    id: home_assistant_started
+  - trigger: state
+    entity_id: !input trigger_entities
+    id: trigger_entity_changed
+  - trigger: state
+    entity_id: !input target_entities
+    for:
+      seconds: 3
+    id: target_state_stable
+  - trigger: state
+    entity_id: !input target_entities
+    for: !input manual_off_duration
+    id: manual_lockout_expired
+
+conditions:
+  - alias: Require at least one available trigger entity
+    condition: template
+    value_template: "{{ available_trigger_entities | count > 0 }}"
+
 actions: []
