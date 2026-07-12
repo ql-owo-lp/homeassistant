@@ -6,9 +6,67 @@ from time import monotonic
 import sys
 
 from homeassistant import bootstrap
-from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import HomeAssistant
+from homeassistant.const import (
+    ATTR_DOMAIN,
+    ATTR_ENTITY_ID,
+    ATTR_SERVICE,
+    ATTR_SERVICE_DATA,
+    EVENT_CALL_SERVICE,
+)
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.runner import RuntimeConfig
+
+
+class TargetActionRecorder:
+    def __init__(self, hass: HomeAssistant, target_entity_id: str) -> None:
+        self.target_entity_id = target_entity_id
+        self.actions: list[tuple[float, str]] = []
+        hass.bus.async_listen(EVENT_CALL_SERVICE, self._record_action)
+
+    @callback
+    def _record_action(self, event: Event) -> None:
+        domain = event.data.get(ATTR_DOMAIN)
+        service = event.data.get(ATTR_SERVICE)
+        if domain != "homeassistant" or service not in {"turn_on", "turn_off"}:
+            return
+        service_data = event.data.get(ATTR_SERVICE_DATA, {})
+        entity_ids = service_data.get(ATTR_ENTITY_ID, [])
+        if isinstance(entity_ids, str):
+            entity_ids = [entity_ids]
+        if self.target_entity_id in entity_ids:
+            self.actions.append((monotonic(), service))
+
+    def clear(self) -> None:
+        self.actions.clear()
+
+    async def assert_no_actions_for(self, duration: float) -> None:
+        started = monotonic()
+        await asyncio.sleep(duration)
+        if self.actions:
+            action_time, service = self.actions[0]
+            raise AssertionError(
+                f"expected no homeassistant actions for {self.target_entity_id} "
+                f"during {duration:.2f}s, got {service} after "
+                f"{action_time - started:.2f}s"
+            )
+
+    async def wait_for_action(
+        self, expected_service: str, timeout: float
+    ) -> None:
+        started = monotonic()
+        while monotonic() - started < timeout:
+            if any(service == expected_service for _, service in self.actions):
+                return
+            await asyncio.sleep(0.02)
+        recorded = [
+            f"{service}@{action_time - started:.2f}s"
+            for action_time, service in self.actions
+        ]
+        raise AssertionError(
+            f"expected homeassistant.{expected_service} for "
+            f"{self.target_entity_id} within {timeout:.2f}s; "
+            f"recorded {recorded}"
+        )
 
 
 async def call_input_boolean(
@@ -87,33 +145,43 @@ async def scenario_delayed_deactivation(hass: HomeAssistant) -> None:
 
 
 async def scenario_manual_off_lockout(hass: HomeAssistant) -> None:
-    await call_input_boolean(hass, "turn_on", "input_boolean.lockout_trigger")
+    target = "input_boolean.manual_target"
+    recorder = TargetActionRecorder(hass, target)
+    await call_input_boolean(hass, "turn_on", "input_boolean.manual_trigger")
     await wait_for_state(
-        hass, "manual-off lockout", "input_boolean.lockout_target", "on", 2.0
+        hass, "manual-off lockout", target, "on", 2.0
     )
-    await call_input_boolean(hass, "turn_off", "input_boolean.lockout_target")
-    await assert_state_after(
-        hass, "manual-off lockout", "input_boolean.lockout_target", "off", 0.25
-    )
+    recorder.clear()
+    await call_input_boolean(hass, "turn_off", target)
+    await recorder.assert_no_actions_for(0.25)
+    await wait_for_state(hass, "manual-off lockout", target, "off", 0.2)
 
 
 async def scenario_trigger_changes_during_lockout(hass: HomeAssistant) -> None:
-    await call_input_boolean(hass, "turn_off", "input_boolean.lockout_trigger")
-    await asyncio.sleep(0.10)
-    await call_input_boolean(hass, "turn_on", "input_boolean.lockout_trigger")
-    await assert_state_after(
-        hass,
-        "trigger changes during lockout",
-        "input_boolean.lockout_target",
-        "off",
-        0.30,
-    )
+    scenario = "trigger changes during lockout"
+    target = "input_boolean.changes_target"
+    recorder = TargetActionRecorder(hass, target)
+    await call_input_boolean(hass, "turn_on", "input_boolean.changes_trigger")
+    await wait_for_state(hass, scenario, target, "on", 2.0)
+    recorder.clear()
+    await call_input_boolean(hass, "turn_off", target)
+    await call_input_boolean(hass, "turn_off", "input_boolean.changes_trigger")
+    await recorder.assert_no_actions_for(0.30)
+    await recorder.wait_for_action("turn_off", 2.5)
+    await wait_for_state(hass, scenario, target, "off", 0.2)
 
 
 async def scenario_lockout_expiry(hass: HomeAssistant) -> None:
-    await wait_for_state(
-        hass, "lockout expiry", "input_boolean.lockout_target", "on", 2.5
-    )
+    scenario = "lockout expiry"
+    target = "input_boolean.expiry_target"
+    recorder = TargetActionRecorder(hass, target)
+    await call_input_boolean(hass, "turn_on", "input_boolean.expiry_trigger")
+    await wait_for_state(hass, scenario, target, "on", 2.0)
+    recorder.clear()
+    await call_input_boolean(hass, "turn_off", target)
+    await recorder.assert_no_actions_for(0.25)
+    await recorder.wait_for_action("turn_on", 2.5)
+    await wait_for_state(hass, scenario, target, "on", 0.2)
 
 
 async def async_main(config_dir: Path) -> None:
@@ -129,10 +197,14 @@ async def async_main(config_dir: Path) -> None:
         for entity_id in (
             "input_boolean.basic_trigger",
             "input_boolean.basic_target",
-            "input_boolean.lockout_trigger",
-            "input_boolean.lockout_target",
+            "input_boolean.manual_trigger",
+            "input_boolean.manual_target",
+            "input_boolean.changes_trigger",
+            "input_boolean.changes_target",
+            "input_boolean.expiry_trigger",
+            "input_boolean.expiry_target",
         ):
-            await wait_for_state(hass, "setup", entity_id, "off", 2.0)
+            await wait_for_state(hass, "runtime setup", entity_id, "off", 2.0)
         await run_scenario("activation", lambda: scenario_activation(hass))
         await run_scenario(
             "delayed deactivation", lambda: scenario_delayed_deactivation(hass)

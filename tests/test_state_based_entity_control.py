@@ -1558,6 +1558,57 @@ class ValidationScriptTests(unittest.TestCase):
         self.assertIn("scenario_trigger_changes_during_lockout", runner)
         self.assertIn("scenario_lockout_expiry", runner)
 
+    def test_runtime_lockout_scenarios_are_isolated_and_observe_actions(self):
+        tests_dir = Path(__file__).resolve().parent
+        wrapper = (
+            tests_dir / "validate_state_based_entity_control_runtime.sh"
+        ).read_text(encoding="utf-8")
+        runner = (
+            tests_dir / "run_state_based_entity_control_runtime.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("EVENT_CALL_SERVICE", runner)
+        self.assertIn("class TargetActionRecorder", runner)
+        self.assertIn("@callback\n    def _record_action", runner)
+        self.assertIn("def clear", runner)
+        self.assertIn("def assert_no_actions_for", runner)
+        self.assertIn("def wait_for_action", runner)
+        self.assertIn('"runtime setup"', runner)
+
+        for fixture in ("manual", "changes", "expiry"):
+            with self.subTest(fixture=fixture):
+                self.assertIn(f"input_boolean.{fixture}_trigger", wrapper)
+                self.assertIn(f"input_boolean.{fixture}_target", wrapper)
+                self.assertIn(f"input_boolean.{fixture}_trigger", runner)
+                self.assertIn(f"input_boolean.{fixture}_target", runner)
+        self.assertNotIn("input_boolean.lockout_trigger", wrapper)
+        self.assertNotIn("input_boolean.lockout_target", wrapper)
+        self.assertIn("target_state_tracking: false", wrapper)
+
+        for scenario_function in (
+            "scenario_manual_off_lockout",
+            "scenario_trigger_changes_during_lockout",
+            "scenario_lockout_expiry",
+        ):
+            with self.subTest(scenario_function=scenario_function):
+                start = runner.index(f"async def {scenario_function}")
+                end = runner.index("\n\nasync def ", start + 1)
+                scenario_source = runner[start:end]
+                self.assertLess(
+                    scenario_source.index("recorder.clear()"),
+                    scenario_source.index(
+                        'await call_input_boolean(hass, "turn_off", target)'
+                    ),
+                )
+
+        manual = runner.index('await run_scenario(\n            "manual-off lockout"')
+        changes = runner.index(
+            'await run_scenario(\n            "trigger changes during lockout"'
+        )
+        expiry = runner.index('await run_scenario(\n            "lockout expiry"')
+        self.assertLess(manual, changes)
+        self.assertLess(changes, expiry)
+
     def test_runtime_runner_stops_recovery_mode_instance(self):
         runner = (
             Path(__file__).resolve().parent

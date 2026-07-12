@@ -20,8 +20,12 @@ homeassistant:
 input_boolean:
   basic_trigger:
   basic_target:
-  lockout_trigger:
-  lockout_target:
+  manual_trigger:
+  manual_target:
+  changes_trigger:
+  changes_target:
+  expiry_trigger:
+  expiry_target:
 automation: !include automations.yaml
 YAML
 
@@ -37,14 +41,43 @@ cat >"${config_dir}/automations.yaml" <<'YAML'
       main_timeout:
         seconds: 0.8
       logbook_enabled: false
-- alias: Manual lockout runtime test
+- alias: Manual-off lockout runtime test
   use_blueprint:
     path: local/state_based_entity_control.yaml
     input:
       trigger_entities:
-        - input_boolean.lockout_trigger
+        - input_boolean.manual_trigger
       target_entities:
-        - input_boolean.lockout_target
+        - input_boolean.manual_target
+      main_timeout:
+        seconds: 0.2
+      manual_off_enabled: true
+      manual_off_duration:
+        seconds: 1.5
+      logbook_enabled: false
+- alias: Trigger changes during lockout runtime test
+  use_blueprint:
+    path: local/state_based_entity_control.yaml
+    input:
+      trigger_entities:
+        - input_boolean.changes_trigger
+      target_entities:
+        - input_boolean.changes_target
+      main_timeout:
+        seconds: 0.2
+      target_state_tracking: false
+      manual_off_enabled: true
+      manual_off_duration:
+        seconds: 1.5
+      logbook_enabled: false
+- alias: Lockout expiry runtime test
+  use_blueprint:
+    path: local/state_based_entity_control.yaml
+    input:
+      trigger_entities:
+        - input_boolean.expiry_trigger
+      target_entities:
+        - input_boolean.expiry_target
       main_timeout:
         seconds: 0.2
       manual_off_enabled: true
