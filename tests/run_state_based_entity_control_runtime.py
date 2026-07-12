@@ -16,13 +16,16 @@ from homeassistant.const import (
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.runner import RuntimeConfig
 
-# Runtime fixtures configure 1.5 seconds and reserve 0.3 for scheduling jitter.
-LOCKOUT_GUARD_SECONDS = 1.2
+# Runtime fixtures configure 1.5 seconds. Allow only 50 ms for clock/scheduling
+# skew when rejecting actions before the configured lockout expires.
+LOCKOUT_DURATION_SECONDS = 1.5
+LOCKOUT_CLOCK_TOLERANCE_SECONDS = 0.05
 POST_ACTION_QUIET_SECONDS = 0.2
 
 
 class TargetActionRecorder:
     def __init__(self, hass: HomeAssistant, target_entity_id: str) -> None:
+        self.hass = hass
         self.target_entity_id = target_entity_id
         self.actions: list[tuple[float, str]] = []
         hass.bus.async_listen(EVENT_CALL_SERVICE, self._record_action)
@@ -43,27 +46,47 @@ class TargetActionRecorder:
     def clear(self) -> None:
         self.actions.clear()
 
-    async def assert_no_actions_for(self, duration: float) -> None:
+    async def assert_no_actions_before(
+        self, scenario: str, earliest_action_at: float
+    ) -> None:
         started = monotonic()
-        await asyncio.sleep(duration)
-        if self.actions:
-            action_time, service = self.actions[0]
-            raise AssertionError(
-                f"expected no homeassistant actions for {self.target_entity_id} "
-                f"during {duration:.2f}s, got {service} after "
-                f"{action_time - started:.2f}s"
-            )
+        while True:
+            early_actions = [
+                action for action in self.actions if action[0] < earliest_action_at
+            ]
+            if early_actions:
+                state = self.hass.states.get(self.target_entity_id)
+                actual_state = None if state is None else state.state
+                raise AssertionError(
+                    f"{scenario}: expected no homeassistant actions for "
+                    f"{self.target_entity_id} before lockout expiry, got "
+                    f"{early_actions}; actual state={actual_state}, elapsed="
+                    f"{monotonic() - started:.2f}s"
+                )
+            remaining = earliest_action_at - monotonic()
+            if remaining <= 0:
+                return
+            await asyncio.sleep(min(0.02, remaining))
 
     async def wait_for_first_action(
-        self, expected_service: str, timeout: float
+        self,
+        scenario: str,
+        expected_service: str,
+        earliest_action_at: float,
+        timeout: float,
     ) -> None:
         started = monotonic()
         while monotonic() - started < timeout:
             if self.actions:
                 action_time, service = self.actions[0]
+                if action_time < earliest_action_at:
+                    raise AssertionError(
+                        f"{scenario}: homeassistant.{service} for "
+                        f"{self.target_entity_id} occurred before lockout expiry"
+                    )
                 if service != expected_service:
                     raise AssertionError(
-                        f"expected first homeassistant action for "
+                        f"{scenario}: expected first homeassistant action for "
                         f"{self.target_entity_id} to be {expected_service}, "
                         f"got {service} after {action_time - started:.2f}s"
                     )
@@ -73,10 +96,13 @@ class TargetActionRecorder:
             f"{service}@{action_time - started:.2f}s"
             for action_time, service in self.actions
         ]
+        state = self.hass.states.get(self.target_entity_id)
+        actual_state = None if state is None else state.state
         raise AssertionError(
-            f"expected homeassistant.{expected_service} for "
+            f"{scenario}: expected homeassistant.{expected_service} for "
             f"{self.target_entity_id} within {timeout:.2f}s; "
-            f"recorded {recorded}"
+            f"recorded {recorded}, actual state={actual_state}, elapsed="
+            f"{monotonic() - started:.2f}s"
         )
 
     async def assert_only_action_for(self, duration: float) -> None:
@@ -178,7 +204,12 @@ async def scenario_manual_off_lockout(hass: HomeAssistant) -> None:
     )
     recorder.clear()
     await call_input_boolean(hass, "turn_off", target)
-    await recorder.assert_no_actions_for(LOCKOUT_GUARD_SECONDS)
+    earliest_action_at = (
+        monotonic()
+        + LOCKOUT_DURATION_SECONDS
+        - LOCKOUT_CLOCK_TOLERANCE_SECONDS
+    )
+    await recorder.assert_no_actions_before("manual-off lockout", earliest_action_at)
     await wait_for_state(hass, "manual-off lockout", target, "off", 0.2)
 
 
@@ -190,9 +221,16 @@ async def scenario_trigger_changes_during_lockout(hass: HomeAssistant) -> None:
     await wait_for_state(hass, scenario, target, "on", 2.0)
     recorder.clear()
     await call_input_boolean(hass, "turn_off", target)
+    earliest_action_at = (
+        monotonic()
+        + LOCKOUT_DURATION_SECONDS
+        - LOCKOUT_CLOCK_TOLERANCE_SECONDS
+    )
     await call_input_boolean(hass, "turn_off", "input_boolean.changes_trigger")
-    await recorder.assert_no_actions_for(LOCKOUT_GUARD_SECONDS)
-    await recorder.wait_for_first_action("turn_off", 1.0)
+    await recorder.assert_no_actions_before(scenario, earliest_action_at)
+    await recorder.wait_for_first_action(
+        scenario, "turn_off", earliest_action_at, 1.0
+    )
     await recorder.assert_only_action_for(POST_ACTION_QUIET_SECONDS)
     await wait_for_state(hass, scenario, target, "off", 0.2)
 
@@ -205,8 +243,15 @@ async def scenario_lockout_expiry(hass: HomeAssistant) -> None:
     await wait_for_state(hass, scenario, target, "on", 2.0)
     recorder.clear()
     await call_input_boolean(hass, "turn_off", target)
-    await recorder.assert_no_actions_for(LOCKOUT_GUARD_SECONDS)
-    await recorder.wait_for_first_action("turn_on", 1.0)
+    earliest_action_at = (
+        monotonic()
+        + LOCKOUT_DURATION_SECONDS
+        - LOCKOUT_CLOCK_TOLERANCE_SECONDS
+    )
+    await recorder.assert_no_actions_before(scenario, earliest_action_at)
+    await recorder.wait_for_first_action(
+        scenario, "turn_on", earliest_action_at, 1.0
+    )
     await recorder.assert_only_action_for(POST_ACTION_QUIET_SECONDS)
     await wait_for_state(hass, scenario, target, "on", 0.2)
 

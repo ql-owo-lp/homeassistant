@@ -1654,24 +1654,15 @@ class ValidationScriptTests(unittest.TestCase):
         self.assertIn("class TargetActionRecorder", runner)
         self.assertIn("@callback\n    def _record_action", runner)
         self.assertIn("def clear", runner)
-        self.assertIn("def assert_no_actions_for", runner)
-        self.assertIn("LOCKOUT_GUARD_SECONDS = 1.2", runner)
+        self.assertIn("def assert_no_actions_before", runner)
+        self.assertIn("LOCKOUT_DURATION_SECONDS = 1.5", runner)
+        self.assertIn("LOCKOUT_CLOCK_TOLERANCE_SECONDS = 0.05", runner)
         self.assertIn("POST_ACTION_QUIET_SECONDS = 0.2", runner)
         self.assertIn("def wait_for_first_action", runner)
         self.assertIn("def assert_only_action_for", runner)
         self.assertNotIn("def wait_for_action", runner)
-        self.assertEqual(
-            3,
-            runner.count(
-                "await recorder.assert_no_actions_for(LOCKOUT_GUARD_SECONDS)"
-            ),
-        )
-        self.assertIn(
-            'await recorder.wait_for_first_action("turn_off", 1.0)', runner
-        )
-        self.assertIn(
-            'await recorder.wait_for_first_action("turn_on", 1.0)', runner
-        )
+        self.assertEqual(3, runner.count("await recorder.assert_no_actions_before("))
+        self.assertEqual(2, runner.count("await recorder.wait_for_first_action("))
         self.assertEqual(
             2,
             runner.count(
@@ -1714,6 +1705,19 @@ class ValidationScriptTests(unittest.TestCase):
         expiry = runner.index('await run_scenario(\n            "lockout expiry"')
         self.assertLess(manual, changes)
         self.assertLess(changes, expiry)
+
+    def test_runtime_enforces_the_full_lockout_deadline(self):
+        runner = (
+            Path(__file__).resolve().parent
+            / "run_state_based_entity_control_runtime.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("LOCKOUT_DURATION_SECONDS = 1.5", runner)
+        self.assertIn("LOCKOUT_CLOCK_TOLERANCE_SECONDS = 0.05", runner)
+        self.assertIn("def assert_no_actions_before", runner)
+        self.assertIn("earliest_action_at", runner)
+        self.assertIn("scenario: str", runner)
+        self.assertIn("hass: HomeAssistant", runner)
+        self.assertIn("actual_state", runner)
 
     def test_runtime_runner_stops_recovery_mode_instance(self):
         runner = (
