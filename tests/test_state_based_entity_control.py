@@ -1572,6 +1572,16 @@ class ReadmeTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertIn(text, self.readme)
 
+    def test_readme_describes_custom_deactivation_with_resolved_timeout(self):
+        self.assertIn(
+            "resolved deactivation timeout still happens before a custom",
+            self.readme,
+        )
+        self.assertNotIn(
+            "main timeout still happens before a custom",
+            self.readme,
+        )
+
 
 class ValidationScriptTests(unittest.TestCase):
     def test_validation_script_pins_supported_home_assistant(self):

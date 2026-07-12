@@ -107,8 +107,9 @@ device action in the action editor. The blueprint does not inject the core
 target lists into custom actions.
 
 Custom actions can contain normal UI actions, conditions, delays, scenes, or
-scripts. The blueprint's main timeout still happens before a custom
-deactivation sequence.
+scripts. The resolved deactivation timeout still happens before a custom
+deactivation sequence; timeout resolution follows the priority described under
+**Alternate timeouts**.
 
 ### Light conditions
 
