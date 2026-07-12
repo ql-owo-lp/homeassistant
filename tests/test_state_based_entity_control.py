@@ -1555,6 +1555,33 @@ class ValidationScriptTests(unittest.TestCase):
         self.assertIn("scenario_activation", runner)
         self.assertIn("scenario_delayed_deactivation", runner)
 
+    def test_runtime_runner_stops_recovery_mode_instance(self):
+        runner = (
+            Path(__file__).resolve().parent
+            / "run_state_based_entity_control_runtime.py"
+        ).read_text(encoding="utf-8")
+        setup = runner.index("hass = await bootstrap.async_setup_hass(runtime)")
+        protected = runner.index("    try:", setup)
+        recovery = runner.index("if hass.config.recovery_mode:", setup)
+        start = runner.index("await hass.async_start()", setup)
+        cleanup = runner.index("    finally:", setup)
+        stop = runner.index("await hass.async_stop(force=True)", setup)
+        self.assertLess(setup, protected)
+        self.assertLess(protected, recovery)
+        self.assertLess(recovery, start)
+        self.assertLess(start, cleanup)
+        self.assertLess(cleanup, stop)
+
+    def test_runtime_validator_has_portable_outer_timeout(self):
+        wrapper = (
+            Path(__file__).resolve().parent
+            / "validate_state_based_entity_control_runtime.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("docker_command=(", wrapper)
+        self.assertIn("command -v timeout", wrapper)
+        self.assertIn('timeout 90s "${docker_command[@]}"', wrapper)
+        self.assertIn('else\n  "${docker_command[@]}"\nfi', wrapper)
+
 
 if __name__ == "__main__":
     unittest.main()

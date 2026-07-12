@@ -91,9 +91,9 @@ async def async_main(config_dir: Path) -> None:
     hass = await bootstrap.async_setup_hass(runtime)
     if hass is None:
         raise RuntimeError("Home Assistant setup returned no instance")
-    if hass.config.recovery_mode:
-        raise RuntimeError("Home Assistant entered recovery mode")
     try:
+        if hass.config.recovery_mode:
+            raise RuntimeError("Home Assistant entered recovery mode")
         await hass.async_start()
         await hass.async_block_till_done()
         for entity_id in (

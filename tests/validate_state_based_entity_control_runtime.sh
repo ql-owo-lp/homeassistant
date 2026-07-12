@@ -53,9 +53,17 @@ cat >"${config_dir}/automations.yaml" <<'YAML'
       logbook_enabled: false
 YAML
 
-docker run --rm \
-  --user "$(id -u):$(id -g)" \
-  -v "${config_dir}:/config" \
-  -v "${repo_dir}/tests:/workspace/tests:ro" \
-  ghcr.io/home-assistant/home-assistant:2026.7.2 \
+docker_command=(
+  docker run --rm
+  --user "$(id -u):$(id -g)"
+  -v "${config_dir}:/config"
+  -v "${repo_dir}/tests:/workspace/tests:ro"
+  ghcr.io/home-assistant/home-assistant:2026.7.2
   python /workspace/tests/run_state_based_entity_control_runtime.py /config
+)
+
+if command -v timeout >/dev/null 2>&1; then
+  timeout 90s "${docker_command[@]}"
+else
+  "${docker_command[@]}"
+fi
