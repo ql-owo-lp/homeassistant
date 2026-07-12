@@ -1582,6 +1582,35 @@ class ReadmeTests(unittest.TestCase):
             self.readme,
         )
 
+    def test_readme_has_pasteable_advanced_timeout_example(self):
+        self.assertIn(
+            "```text\n"
+            "17:00:00-19:30:00,30;19:30:00-20:00:00,0:00:07.5\n"
+            "```",
+            self.readme,
+        )
+        self.assertNotIn("```yaml\nAlternate timeout:", self.readme)
+        self.assertNotIn("```yaml\nDecimal timeout:", self.readme)
+
+    def test_readme_explains_shared_multi_target_manual_off_lockout(self):
+        normalized_readme = " ".join(self.readme.split())
+        self.assertIn(
+            "any target matching the manual-off pattern suppresses activation "
+            "for all selected targets",
+            normalized_readme,
+        )
+        self.assertIn(
+            "remaining lockout is the maximum across matching targets",
+            normalized_readme,
+        )
+        self.assertIn(
+            "most recently changed matching target determines expiry",
+            normalized_readme,
+        )
+
+    def test_readme_lists_docker_prerequisites_for_validators(self):
+        self.assertIn("Docker CLI and a running Docker daemon", self.readme)
+
 
 class ValidationScriptTests(unittest.TestCase):
     def test_validation_script_pins_supported_home_assistant(self):

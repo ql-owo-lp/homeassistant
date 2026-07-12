@@ -159,6 +159,11 @@ Changes during the lockout restart the automation's wait, but the remaining
 time is recalculated rather than extending the original interval. At expiry,
 the latest trigger state and all gates are reevaluated.
 
+With multiple targets, any target matching the manual-off pattern suppresses
+activation for all selected targets. The remaining lockout is the maximum
+across matching targets, so the most recently changed matching target
+determines expiry.
+
 ```text
 T+0.0  Target is manually turned off; lockout begins.
 T+0.5  Trigger changes; the target remains off.
@@ -222,9 +227,14 @@ start later than its end crosses midnight.
 Duration is either numeric seconds or an hours/minutes/seconds value, with
 optional decimal seconds:
 
-```yaml
-Alternate timeout: 17:00:00-19:30:00,30
-Decimal timeout: 19:30:00-20:00:00,0:00:07.5
+Alternate timeout: `17:00:00-19:30:00,30`
+
+Decimal timeout: `19:30:00-20:00:00,0:00:07.5`
+
+Paste both entries into the advanced field as:
+
+```text
+17:00:00-19:30:00,30;19:30:00-20:00:00,0:00:07.5
 ```
 
 A malformed nonempty entry stops the run with an error; it is not silently
@@ -304,6 +314,8 @@ conditions, delay, revalidation, and action sequence used by an individual run.
 
 From the repository root, run the fast unit and template suite, configuration
 expansion validation, and real Home Assistant runtime scenarios:
+
+Both validator scripts require the Docker CLI and a running Docker daemon.
 
 ```bash
 python3 -m unittest discover -v
