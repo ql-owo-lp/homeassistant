@@ -1572,7 +1572,30 @@ class ValidationScriptTests(unittest.TestCase):
         self.assertIn("@callback\n    def _record_action", runner)
         self.assertIn("def clear", runner)
         self.assertIn("def assert_no_actions_for", runner)
-        self.assertIn("def wait_for_action", runner)
+        self.assertIn("LOCKOUT_GUARD_SECONDS = 1.2", runner)
+        self.assertIn("POST_ACTION_QUIET_SECONDS = 0.2", runner)
+        self.assertIn("def wait_for_first_action", runner)
+        self.assertIn("def assert_only_action_for", runner)
+        self.assertNotIn("def wait_for_action", runner)
+        self.assertEqual(
+            3,
+            runner.count(
+                "await recorder.assert_no_actions_for(LOCKOUT_GUARD_SECONDS)"
+            ),
+        )
+        self.assertIn(
+            'await recorder.wait_for_first_action("turn_off", 1.0)', runner
+        )
+        self.assertIn(
+            'await recorder.wait_for_first_action("turn_on", 1.0)', runner
+        )
+        self.assertEqual(
+            2,
+            runner.count(
+                "await recorder.assert_only_action_for("
+                "POST_ACTION_QUIET_SECONDS)"
+            ),
+        )
         self.assertIn('"runtime setup"', runner)
 
         for fixture in ("manual", "changes", "expiry"):
