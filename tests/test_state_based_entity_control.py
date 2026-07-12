@@ -1539,6 +1539,22 @@ class ValidationScriptTests(unittest.TestCase):
         self.assertIn("--script check_config", script)
         self.assertIn("use_blueprint", script)
 
+    def test_runtime_validator_uses_pinned_home_assistant_and_runner(self):
+        tests_dir = Path(__file__).resolve().parent
+        wrapper = (
+            tests_dir / "validate_state_based_entity_control_runtime.sh"
+        ).read_text(encoding="utf-8")
+        runner = (
+            tests_dir / "run_state_based_entity_control_runtime.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("home-assistant:2026.7.2", wrapper)
+        self.assertIn("run_state_based_entity_control_runtime.py", wrapper)
+        self.assertIn('--user "$(id -u):$(id -g)"', wrapper)
+        self.assertIn("RuntimeConfig", runner)
+        self.assertIn("async_setup_hass", runner)
+        self.assertIn("scenario_activation", runner)
+        self.assertIn("scenario_delayed_deactivation", runner)
+
 
 if __name__ == "__main__":
     unittest.main()
