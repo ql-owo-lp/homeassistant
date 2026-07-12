@@ -86,6 +86,36 @@ async def scenario_delayed_deactivation(hass: HomeAssistant) -> None:
     )
 
 
+async def scenario_manual_off_lockout(hass: HomeAssistant) -> None:
+    await call_input_boolean(hass, "turn_on", "input_boolean.lockout_trigger")
+    await wait_for_state(
+        hass, "manual-off lockout", "input_boolean.lockout_target", "on", 2.0
+    )
+    await call_input_boolean(hass, "turn_off", "input_boolean.lockout_target")
+    await assert_state_after(
+        hass, "manual-off lockout", "input_boolean.lockout_target", "off", 0.25
+    )
+
+
+async def scenario_trigger_changes_during_lockout(hass: HomeAssistant) -> None:
+    await call_input_boolean(hass, "turn_off", "input_boolean.lockout_trigger")
+    await asyncio.sleep(0.10)
+    await call_input_boolean(hass, "turn_on", "input_boolean.lockout_trigger")
+    await assert_state_after(
+        hass,
+        "trigger changes during lockout",
+        "input_boolean.lockout_target",
+        "off",
+        0.30,
+    )
+
+
+async def scenario_lockout_expiry(hass: HomeAssistant) -> None:
+    await wait_for_state(
+        hass, "lockout expiry", "input_boolean.lockout_target", "on", 2.5
+    )
+
+
 async def async_main(config_dir: Path) -> None:
     runtime = RuntimeConfig(config_dir=str(config_dir), skip_pip=True)
     hass = await bootstrap.async_setup_hass(runtime)
@@ -106,6 +136,16 @@ async def async_main(config_dir: Path) -> None:
         await run_scenario("activation", lambda: scenario_activation(hass))
         await run_scenario(
             "delayed deactivation", lambda: scenario_delayed_deactivation(hass)
+        )
+        await run_scenario(
+            "manual-off lockout", lambda: scenario_manual_off_lockout(hass)
+        )
+        await run_scenario(
+            "trigger changes during lockout",
+            lambda: scenario_trigger_changes_during_lockout(hass),
+        )
+        await run_scenario(
+            "lockout expiry", lambda: scenario_lockout_expiry(hass)
         )
     finally:
         await hass.async_stop(force=True)

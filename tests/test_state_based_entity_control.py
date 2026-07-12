@@ -1554,6 +1554,9 @@ class ValidationScriptTests(unittest.TestCase):
         self.assertIn("async_setup_hass", runner)
         self.assertIn("scenario_activation", runner)
         self.assertIn("scenario_delayed_deactivation", runner)
+        self.assertIn("scenario_manual_off_lockout", runner)
+        self.assertIn("scenario_trigger_changes_during_lockout", runner)
+        self.assertIn("scenario_lockout_expiry", runner)
 
     def test_runtime_runner_stops_recovery_mode_instance(self):
         runner = (
