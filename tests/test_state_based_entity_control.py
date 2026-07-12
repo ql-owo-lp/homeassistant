@@ -1529,6 +1529,50 @@ class RuntimeTemplateBehaviorTests(unittest.TestCase):
         )
 
 
+class ReadmeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.readme = (
+            Path(__file__).resolve().parents[1] / "blueprints" / "v2" / "README.md"
+        ).read_text(encoding="utf-8")
+
+    def test_readme_covers_configuration_and_operations(self):
+        required = (
+            "# State Based Entity Control v2",
+            "## Requirements",
+            "## Quick start",
+            "## UI configuration reference",
+            "### Core entities and timeout",
+            "### State matching",
+            "### Actions",
+            "### Light conditions",
+            "### Blocking",
+            "### Manual-off handling",
+            "### Execution windows",
+            "### Alternate timeouts",
+            "### Advanced ranges",
+            "### Diagnostics",
+            "## Scenes and scripts",
+            "## Troubleshooting",
+            "## Testing",
+        )
+        for text in required:
+            with self.subTest(text=text):
+                self.assertIn(text, self.readme)
+
+    def test_readme_commands_and_formats_match_the_repository(self):
+        for text in (
+            "Home Assistant 2026.7",
+            "python3 -m unittest discover -v",
+            "tests/validate_state_based_entity_control.sh",
+            "tests/validate_state_based_entity_control_runtime.sh",
+            "start-end,duration",
+            "native slots → advanced ranges → main timeout",
+        ):
+            with self.subTest(text=text):
+                self.assertIn(text, self.readme)
+
+
 class ValidationScriptTests(unittest.TestCase):
     def test_validation_script_pins_supported_home_assistant(self):
         script = (
